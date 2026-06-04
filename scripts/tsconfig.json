@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2021",
+    "esModuleInterop": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "paths": {
+      "@prisma/client": ["../apps/backend/node_modules/.prisma/client"]
+    }
+  }
+}

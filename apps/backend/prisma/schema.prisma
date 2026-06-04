@@ -1,0 +1,249 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  AUTHOR
+  EDITOR
+  ADMIN
+}
+
+enum PostStatus {
+  DRAFT
+  IN_REVIEW
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum HomepageSlotType {
+  HERO
+  GRID
+  LIST
+}
+
+// ─── Site branding ────────────────────────────────────────────────────────────
+
+model SiteSettings {
+  id              String  @id @default("default")
+  siteName        String  @default("Civicpress")
+  tagline         String?
+  logoMediaId     String?
+  faviconMediaId  String?
+  primaryColor    String  @default("#8A0808")
+  secondaryColor  String  @default("#1a1a1a")
+  accentColor     String  @default("#c0392b")
+  backgroundColor String  @default("#ffffff")
+  textColor       String  @default("#2d2d2d")
+  headingFont     String  @default("Roboto")
+  bodyFont        String  @default("Open Sans")
+  facebookUrl     String?
+  twitterUrl      String?
+  youtubeUrl      String?
+  instagramUrl    String?
+  footerHtml      String?
+
+  logoMedia    Media? @relation("logo", fields: [logoMediaId], references: [id])
+  faviconMedia Media? @relation("favicon", fields: [faviconMediaId], references: [id])
+}
+
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+model LayoutSetting {
+  id                      String  @id @default("default")
+  homeTemplateId          String  @default("home-magazine")
+  categoryTemplateId      String  @default("cat-list")
+  homeTemplateOptions     Json?
+  categoryTemplateOptions Json?
+}
+
+// ─── Media ────────────────────────────────────────────────────────────────────
+
+model Media {
+  id        String   @id @default(cuid())
+  filename  String
+  mimeType  String
+  width     Int?
+  height    Int?
+  sizeBytes Int?
+  alt       String?
+  caption   String?
+  path      String
+  variants  Json?
+  ownerId   String?
+  createdAt DateTime @default(now())
+
+  owner           User?          @relation("mediaOwner", fields: [ownerId], references: [id])
+  posts           Post[]         @relation("heroMedia")
+  settingsLogo    SiteSettings[] @relation("logo")
+  settingsFavicon SiteSettings[] @relation("favicon")
+  userAvatars     User[]         @relation("userAvatar")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  displayName   String
+  slug          String    @unique
+  bio           String?
+  role          Role      @default(AUTHOR)
+  avatarMediaId String?
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  avatar                  Media?         @relation("userAvatar", fields: [avatarMediaId], references: [id])
+  media                   Media[]        @relation("mediaOwner")
+  posts                   Post[]         @relation("postAuthor")
+  submittedPosts          Post[]         @relation("postSubmitter")
+  approvedPosts           Post[]         @relation("postApprover")
+  revisions               Revision[]
+  auditLogs               AuditLog[]
+  homepageSlotsUpdated    HomepageSlot[] @relation("homepageSlotUpdatedBy")
+}
+
+// ─── Category ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  color       String?
+  description String?
+  parentId    String?
+  showInMenu  Boolean @default(true)
+  menuOrder   Int     @default(0)
+  externalId  String? @unique
+
+  parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryChildren")
+  posts    PostCategory[]
+}
+
+// ─── Tag ──────────────────────────────────────────────────────────────────────
+
+model Tag {
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  externalId String?  @unique
+  posts      PostTag[]
+}
+
+// ─── Post ─────────────────────────────────────────────────────────────────────
+
+model Post {
+  id             String     @id @default(cuid())
+  title          String
+  slug           String     @unique
+  excerpt        String?
+  contentHtml    String     @default("")
+  heroMediaId    String?
+  videoUrl       String?
+  authorId       String?
+  status         PostStatus @default(DRAFT)
+  scheduledFor   DateTime?
+  submittedById  String?
+  approvedById   String?
+  publishedAt    DateTime?
+  seoTitle       String?
+  seoDescription String?
+  externalId     String?    @unique
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  heroMedia      Media?         @relation("heroMedia", fields: [heroMediaId], references: [id])
+  author         User?          @relation("postAuthor", fields: [authorId], references: [id])
+  submittedBy    User?          @relation("postSubmitter", fields: [submittedById], references: [id])
+  approvedBy     User?          @relation("postApprover", fields: [approvedById], references: [id])
+  categories     PostCategory[]
+  tags           PostTag[]
+  revisions      Revision[]
+  homepageSlots  HomepageSlot[]
+}
+
+// ─── Join tables ──────────────────────────────────────────────────────────────
+
+model PostCategory {
+  postId     String
+  categoryId String
+  isPrimary  Boolean @default(false)
+
+  post     Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([postId, categoryId])
+}
+
+model PostTag {
+  postId String
+  tagId  String
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+// ─── Revision ─────────────────────────────────────────────────────────────────
+
+model Revision {
+  id          String   @id @default(cuid())
+  postId      String
+  title       String
+  excerpt     String?
+  contentHtml String
+  editorId    String?
+  message     String?
+  createdAt   DateTime @default(now())
+
+  post   Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  editor User? @relation(fields: [editorId], references: [id])
+
+  @@index([postId, createdAt])
+}
+
+// ─── Audit log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String
+  diff      Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+// ─── Homepage slots ───────────────────────────────────────────────────────────
+
+model HomepageSlot {
+  id          String           @id @default(cuid())
+  slotType    HomepageSlotType
+  position    Int
+  postId      String
+  updatedAt   DateTime         @updatedAt
+  updatedById String?
+
+  post      Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("homepageSlotUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@unique([slotType, position])
+}

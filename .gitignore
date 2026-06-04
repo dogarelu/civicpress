@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.angular/
+.analog/
+*.local
+.env
+!.env.example
+*.log
+.logs/
+.DS_Store
+apps/backend/storage/media/orig/
+apps/backend/storage/media/cache/
+/tmp/visual-diff/
+
+
+old-wp/*
