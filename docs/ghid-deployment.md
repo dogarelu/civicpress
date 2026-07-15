@@ -209,13 +209,11 @@ Se pornește de la `scripts/ops/ddns-watchdog.env.example`. Conține date sensib
 
 Migrările se află în `apps/backend/prisma/migrations/` (21 migrări; provider `postgresql`).
 
-| Context                                | Comandă                                                        |
-| -------------------------------------- | -------------------------------------------------------------- |
-| Dev (interactiv, creează migrare nouă) | `pnpm db:migrate` → `prisma migrate dev`                       |
-| Dev automat (via `start.sh`)           | `prisma migrate deploy` (dacă detectează migrări în așteptare) |
-| Producție                              | `pnpm --filter @civicpress/backend exec prisma migrate deploy` |
-| Prisma Studio (browser DB)             | `pnpm db:studio` → `prisma studio`                             |
-| Generare client Prisma                 | `pnpm --filter @civicpress/backend prisma:generate`            |
+- **Dev (interactiv, creează migrare nouă):** `pnpm db:migrate` (rulează `prisma migrate dev`)
+- **Dev automat (via `start.sh`):** `prisma migrate deploy`, dacă detectează migrări în așteptare
+- **Producție:** `pnpm --filter @civicpress/backend exec prisma migrate deploy`
+- **Prisma Studio (browser DB):** `pnpm db:studio` (rulează `prisma studio`)
+- **Generare client Prisma:** `pnpm --filter @civicpress/backend prisma:generate`
 
 ### 7.2 Postgres în dezvoltare (Docker)
 
@@ -291,7 +289,8 @@ Secvența de build executată de script:
 
 ```bash
 pnpm install --frozen-lockfile || pnpm install
-export VITE_API_BASE_URL=""      # forțează căi relative /v1 în client
+# forțează căi relative /v1 în client
+export VITE_API_BASE_URL=""
 pnpm --filter @civicpress/backend prisma:generate
 pnpm --filter @civicpress/backend exec prisma migrate deploy
 pnpm --filter @civicpress/shared build
@@ -335,7 +334,8 @@ pm2 status
 pm2 logs civic-backend
 pm2 restart civic-public
 pm2 save
-pm2 startup      # (opțional) pornire automată la boot — nu e configurat de script
+# opțional: pornire automată la boot (nu e configurat de script)
+pm2 startup
 ```
 
 > Note importante despre căile de build:
@@ -407,8 +407,13 @@ Mecanism:
 Instalare:
 
 ```bash
-chmod +x scripts/ops/ddns-watchdog.sh scripts/ops/update-cpanel-root-a.sh
-cp scripts/ops/ddns-watchdog.env.example scripts/ops/ddns-watchdog.env  # editează valorile
+chmod +x scripts/ops/ddns-watchdog.sh \
+         scripts/ops/update-cpanel-root-a.sh
+
+# copiază șablonul, apoi editează valorile
+cp scripts/ops/ddns-watchdog.env.example \
+   scripts/ops/ddns-watchdog.env
+
 ./scripts/ops/install-ddns-watchdog.sh
 ```
 
