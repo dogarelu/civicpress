@@ -1,27 +1,37 @@
 import { Component, Input, OnInit, OnDestroy, PLATFORM_ID, inject } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import type { PublicSettings } from '@civicpress/shared';
+import { AdminSessionService } from '../services/admin-session.service';
 
 @Component({
   selector: 'cp-top-bar',
   standalone: true,
   imports: [],
   template: `
-    <div class="bg-primary text-white text-xs py-1.5">
-      <div class="container mx-auto px-4 flex items-center justify-between">
-        <span class="text-white/90 flex items-center gap-2">
-          <span>{{ todayStr }}</span>
+    <div class="bg-white border-b border-gray-200 text-xs py-1.5">
+      <div class="container page-container mx-auto px-3 md:px-4 flex items-center justify-between">
+        <span class="text-gray-600 flex items-center gap-2 min-w-0">
+          <span class="hidden sm:inline truncate">{{ todayStr }}</span>
           @if (timeStr) {
             <span class="tabular-nums">{{ timeStr }}</span>
           }
         </span>
         <div class="flex items-center gap-3">
+          @if (isAdmin()) {
+            <a
+              href="/admin/"
+              class="inline-flex items-center rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-700 hover:bg-gray-100 transition-colors"
+              aria-label="Admin"
+            >
+              Admin
+            </a>
+          }
           @if (settings?.facebookUrl) {
             <a
               [href]="settings!.facebookUrl!"
               target="_blank"
               rel="noopener"
-              class="hover:text-white/70 transition-colors"
+              class="text-gray-500 hover:text-gray-800 transition-colors"
               aria-label="Facebook"
             >
               <svg
@@ -42,7 +52,7 @@ import type { PublicSettings } from '@civicpress/shared';
               [href]="settings!.twitterUrl!"
               target="_blank"
               rel="noopener"
-              class="hover:text-white/70 transition-colors"
+              class="text-gray-500 hover:text-gray-800 transition-colors"
               aria-label="Twitter/X"
             >
               <svg
@@ -63,7 +73,7 @@ import type { PublicSettings } from '@civicpress/shared';
               [href]="settings!.youtubeUrl!"
               target="_blank"
               rel="noopener"
-              class="hover:text-white/70 transition-colors"
+              class="text-gray-500 hover:text-gray-800 transition-colors"
               aria-label="YouTube"
             >
               <svg
@@ -90,7 +100,9 @@ export class TopBarComponent implements OnInit, OnDestroy {
   timeStr = '';
 
   private platformId = inject(PLATFORM_ID);
+  private adminSession = inject(AdminSessionService);
   private timer: ReturnType<typeof setInterval> | null = null;
+  isAdmin = this.adminSession.isAdmin;
 
   ngOnInit() {
     this.todayStr = new Intl.DateTimeFormat('ro-RO', {
@@ -101,6 +113,7 @@ export class TopBarComponent implements OnInit, OnDestroy {
     }).format(new Date());
 
     if (isPlatformBrowser(this.platformId)) {
+      this.adminSession.hydrate();
       const tick = () => {
         this.timeStr = new Intl.DateTimeFormat('ro-RO', {
           hour: '2-digit',

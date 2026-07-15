@@ -1,81 +1,126 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type { PostSummary } from '@civicpress/shared';
+import { cleanExcerptText } from '@civicpress/shared';
+import { PostImagePillComponent } from './post-image-pill.component';
+import { PostViewCountComponent } from './post-view-count.component';
+import { SiteSettingsService } from '../services/site-settings.service';
+import { formatPostDateForList } from '../utils/post-date-display';
 
 @Component({
   selector: 'cp-recomandare-hero',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, PostImagePillComponent, PostViewCountComponent],
   template: `
     @if (post) {
       <article class="group">
-        <a [routerLink]="'/' + post.slug" class="block">
+        <div class="mt-3 px-1">
+          @if (showCategory && post.primaryCategory) {
+            <a
+              [routerLink]="['/category', post.primaryCategory.slug]"
+              class="uppercase tracking-wider mb-2 inline-block px-2 py-0.5 rounded-sm text-gray-700 bg-gray-100 transition-colors hover:text-gray-900"
+              style="font-size: var(--module-category-font-size, 14px); font-weight: var(--module-category-font-weight, 700); color: var(--module-category-color, currentColor);"
+              >{{ post.primaryCategory.name }}</a
+            >
+          }
+          <h2
+            class="font-heading leading-tight text-secondary"
+            style="font-size: var(--hero-title-font-size, 28px); font-weight: var(--hero-title-font-weight, 800); color: var(--hero-title-color, currentColor);"
+          >
+            <a [routerLink]="'/' + post.slug" class="hover:text-primary transition-colors">
+              {{ post.title }}
+            </a>
+          </h2>
+        </div>
+        <a [routerLink]="'/' + post.slug" class="block w-full">
           @if (post.heroImage) {
             <div
-              class="overflow-hidden bg-muted aspect-[16/9] max-h-[440px] rounded-sm shadow-sm group-hover:shadow-lg transition-shadow duration-300"
+              class="relative w-full overflow-hidden bg-muted aspect-[16/9] max-h-[440px] rounded-sm shadow-sm group-hover:shadow-lg transition-shadow duration-300"
             >
               <img
                 [src]="post.heroImage.url"
                 [alt]="post.heroImage.alt ?? post.title"
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 loading="eager"
-                width="660"
-                height="370"
+                style="width: 100%; height: 100%; object-fit: cover;"
               />
+              <cp-post-image-pill [pill]="post.pill" size="lg" />
             </div>
           }
         </a>
         <div class="mt-3 px-1">
-          @if (post.primaryCategory) {
-            <a
-              [routerLink]="['/category', post.primaryCategory.slug]"
-              class="text-sm font-bold uppercase tracking-wider mb-2 inline-block px-2 py-0.5 rounded-sm transition-opacity hover:opacity-80"
-              [style.color]="post.primaryCategory.color ?? 'var(--color-primary)'"
-              [style.background-color]="categoryBg"
-              >{{ post.primaryCategory.name }}</a
+          @if (canShowMeta(post)) {
+            <div
+              class="flex items-center gap-1.5 mt-3 text-gray-500"
+              style="font-size: var(--module-meta-font-size, 12px); font-weight: var(--module-meta-font-weight, 400); color: var(--module-meta-color, currentColor);"
             >
+              @if (canShowDate(post)) {
+                <time [dateTime]="post.publishedAt">{{ formatDate(post.publishedAt) }}</time>
+              }
+              @if (canShowDate(post) && (canShowAuthor(post) || canShowViews(post))) {
+                <span class="text-gray-300">•</span>
+              }
+              @if (canShowAuthor(post) && displayAuthor(post); as authorName) {
+                <span class="font-medium">{{ authorName }}</span>
+              }
+              @if (canShowAuthor(post) && canShowViews(post)) {
+                <span class="text-gray-300">•</span>
+              }
+              @if (canShowViews(post)) {
+                <cp-post-view-count [count]="post.viewCount!" />
+              }
+            </div>
           }
-          <h2 class="font-heading text-2xl md:text-3xl font-extrabold leading-tight text-secondary">
-            <a [routerLink]="'/' + post.slug" class="hover:text-primary transition-colors">
-              {{ post.title }}
-            </a>
-          </h2>
-          @if (post.excerpt) {
-            <p class="text-sm text-gray-600 mt-2 line-clamp-3">{{ cleanExcerpt }}</p>
+          @if (showSummary && post.excerpt) {
+            <p
+              class="text-gray-600 mt-2 news-summary-clamp"
+              style="font-size: var(--news-summary-font-size, 14px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, currentColor);"
+            >
+              {{ cleanExcerpt(post) }}
+            </p>
           }
-          <div class="flex items-center gap-1.5 mt-3 text-xs text-gray-500">
-            @if (post.author) {
-              <span class="font-medium">{{ post.author.displayName }}</span>
-              <span class="text-gray-300">•</span>
-            }
-            @if (post.publishedAt) {
-              <time [dateTime]="post.publishedAt">{{ formatDate(post.publishedAt) }}</time>
-            }
-          </div>
         </div>
       </article>
     }
   `,
 })
 export class RecomandareHeroComponent {
-  @Input() post: PostSummary | null = null;
+  private siteSettings = inject(SiteSettingsService);
 
-  get cleanExcerpt(): string {
-    if (!this.post?.excerpt) return '';
-    return this.post.excerpt.replace(/<[^>]*>/g, '').trim();
+  @Input() post: PostSummary | null = null;
+  @Input() showDate = true;
+  @Input() showAuthor = true;
+  /** Show the primary category label above the title. */
+  @Input() showCategory = true;
+  /** Show the excerpt text under the image. */
+  @Input() showSummary = true;
+
+  displayAuthor(post: PostSummary): string | null {
+    return post.authorName?.trim() || post.author?.displayName || null;
   }
 
-  get categoryBg(): string {
-    const color = this.post?.primaryCategory?.color ?? '#8a0808';
-    return color + '18';
+  canShowDate(post: PostSummary): boolean {
+    return this.showDate && post.showDate !== false && !!post.publishedAt;
+  }
+
+  canShowAuthor(post: PostSummary): boolean {
+    return this.showAuthor && post.showAuthor !== false && !!this.displayAuthor(post);
+  }
+
+  canShowViews(post: PostSummary): boolean {
+    return this.siteSettings.canShowViews(post);
+  }
+
+  canShowMeta(post: PostSummary): boolean {
+    return this.canShowAuthor(post) || this.canShowDate(post) || this.canShowViews(post);
+  }
+
+  cleanExcerpt(post: PostSummary): string {
+    return cleanExcerptText(post.excerpt);
   }
 
   formatDate(dateStr: string): string {
-    return new Intl.DateTimeFormat('ro-RO', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(dateStr));
+    return formatPostDateForList(dateStr);
   }
 }

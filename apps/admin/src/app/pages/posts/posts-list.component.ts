@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthStore } from '../../services/auth.store';
 import { ToastService } from '../../services/toast.service';
-import type { AdminPostSummary } from '@civicpress/shared';
+import type { AdminPostSummary, PostTransition } from '@civicpress/shared';
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Ciornă',
@@ -45,12 +45,12 @@ const STATUS_COLORS: Record<string, string> = {
           type="text"
           [(ngModel)]="search"
           (ngModelChange)="onSearch()"
-          placeholder="Caută după titlu..."
+          placeholder="Caută articole..."
           class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 w-52"
         />
         <select
           [(ngModel)]="statusFilter"
-          (ngModelChange)="load()"
+          (ngModelChange)="onFilterChange()"
           class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
         >
           <option value="">Toate statusurile</option>
@@ -75,7 +75,10 @@ const STATUS_COLORS: Record<string, string> = {
                 Categorie
               </th>
               <th class="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">
-                Modificat
+                Data publicării
+              </th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600 hidden md:table-cell">
+                Vizualizări
               </th>
               <th class="text-right px-4 py-3 font-medium text-gray-600">Acțiuni</th>
             </tr>
@@ -83,11 +86,11 @@ const STATUS_COLORS: Record<string, string> = {
           <tbody>
             @if (loading()) {
               <tr>
-                <td colspan="6" class="text-center py-10 text-gray-400">Se încarcă...</td>
+                <td colspan="7" class="text-center py-10 text-gray-400">Se încarcă...</td>
               </tr>
             } @else if (posts().length === 0) {
               <tr>
-                <td colspan="6" class="text-center py-10 text-gray-400">Niciun articol.</td>
+                <td colspan="7" class="text-center py-10 text-gray-400">Niciun articol.</td>
               </tr>
             }
             @for (post of posts(); track post.id) {
@@ -109,21 +112,20 @@ const STATUS_COLORS: Record<string, string> = {
                   </span>
                 </td>
                 <td class="px-4 py-3 hidden md:table-cell text-gray-500">
-                  {{ post.author?.displayName ?? '—' }}
+                  {{ post.authorName ?? post.author?.displayName ?? '—' }}
                 </td>
                 <td class="px-4 py-3 hidden lg:table-cell">
                   @if (post.primaryCategory) {
-                    <span
-                      class="px-2 py-0.5 rounded text-xs"
-                      [style.background]="post.primaryCategory.color + '22'"
-                      [style.color]="post.primaryCategory.color ?? '#666'"
-                    >
+                    <span class="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
                       {{ post.primaryCategory.name }}
                     </span>
                   }
                 </td>
                 <td class="px-4 py-3 hidden lg:table-cell text-gray-400 text-xs">
-                  {{ formatDate(post.updatedAt) }}
+                  {{ post.publishedAt ? formatDate(post.publishedAt) : '—' }}
+                </td>
+                <td class="px-4 py-3 hidden md:table-cell text-right text-gray-600 tabular-nums">
+                  {{ post.viewCount ?? 0 }}
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-end gap-2">
@@ -168,6 +170,14 @@ const STATUS_COLORS: Record<string, string> = {
                         class="text-xs text-gray-500 hover:underline"
                       >
                         Arhivează
+                      </button>
+                    }
+                    @if (post.status === 'ARCHIVED' && auth.isEditor()) {
+                      <button
+                        (click)="transition(post, 'republish')"
+                        class="text-xs text-green-600 hover:underline"
+                      >
+                        Republică
                       </button>
                     }
                   </div>
@@ -245,7 +255,15 @@ export class PostsListComponent implements OnInit {
 
   onSearch() {
     if (this.searchTimer) clearTimeout(this.searchTimer);
-    this.searchTimer = setTimeout(() => this.load(), 400);
+    this.searchTimer = setTimeout(() => {
+      this.page.set(1);
+      this.load();
+    }, 400);
+  }
+
+  onFilterChange() {
+    this.page.set(1);
+    this.load();
   }
 
   prevPage() {
@@ -265,7 +283,7 @@ export class PostsListComponent implements OnInit {
     return this.auth.isEditor() || post.author?.id === me.id;
   }
 
-  confirmTransition(post: AdminPostSummary, action: string) {
+  confirmTransition(post: AdminPostSummary, action: PostTransition['action']) {
     const isDestructive = action === 'archive' || action === 'reject';
     if (isDestructive) {
       const ok = window.confirm(`Sigur vrei să continui cu „${action}” pentru „${post.title}”?`);
@@ -274,7 +292,7 @@ export class PostsListComponent implements OnInit {
     this.transition(post, action);
   }
 
-  transition(post: AdminPostSummary, action: string) {
+  transition(post: AdminPostSummary, action: PostTransition['action']) {
     this.api.transitionPost(post.id, action).subscribe({
       next: (r) => {
         this.toast.success(`Status actualizat: ${r.status}`);

@@ -1,4 +1,4 @@
-import type { PublicSettings, MenuItem, LayoutPublic } from '@civicpress/shared';
+import type { PublicSettings, MenuItem, ExchangeRatesResponse } from '@civicpress/shared';
 
 const BACKEND = process.env['BACKEND_URL'] ?? 'http://localhost:3000';
 
@@ -9,10 +9,13 @@ export const load = async ({
   params: Record<string, string>;
   event: unknown;
 }) => {
-  const [settings, menu, layout] = await Promise.all([
+  const [settings, menu, exchangeRates] = await Promise.all([
     fetch<PublicSettings>(`${BACKEND}/v1/settings/public`),
     fetch<MenuItem[]>(`${BACKEND}/v1/menu`),
-    fetch<LayoutPublic>(`${BACKEND}/v1/layout/public`),
+    fetch<ExchangeRatesResponse>(`${BACKEND}/v1/exchange-rates`).catch(() => ({
+      publishedAt: new Date().toISOString().slice(0, 10),
+      rates: [],
+    })),
   ]);
-  return { settings, menu, layout };
+  return { settings, menu, exchangeRates };
 };

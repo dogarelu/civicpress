@@ -1,0 +1,3 @@
+ALTER TABLE "SiteSettings"
+ADD COLUMN "newsTitleFontSize" INTEGER NOT NULL DEFAULT 20,
+ADD COLUMN "newsTitleFontBold" BOOLEAN NOT NULL DEFAULT true;

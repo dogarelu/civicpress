@@ -1,0 +1,2 @@
+ALTER TABLE "SiteSettings"
+ADD COLUMN "defaultSummaryRows" INTEGER NOT NULL DEFAULT 3;

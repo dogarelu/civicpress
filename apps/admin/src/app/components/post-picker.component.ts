@@ -17,6 +17,8 @@ import type { AdminPostSummary } from '@civicpress/shared';
 export interface PickedPost {
   id: string;
   title: string;
+  publishedAt?: string | null;
+  authorDisplayName?: string | null;
 }
 
 @Component({
@@ -28,18 +30,33 @@ export interface PickedPost {
       <label class="block text-xs font-medium text-gray-500 mb-1">{{ label }}</label>
 
       @if (value) {
-        <div
-          class="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm"
-        >
-          <span class="flex-1 truncate font-medium text-gray-800">{{ value.title }}</span>
-          <button
-            type="button"
-            (click)="clear()"
-            class="flex-shrink-0 text-gray-400 hover:text-red-600 transition-colors text-lg leading-none"
-            aria-label="Elimină"
-          >
-            ×
-          </button>
+        <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm">
+          <div class="flex items-start gap-2">
+            <div class="flex-1 min-w-0">
+              <div class="truncate font-medium text-gray-800">{{ value.title }}</div>
+              @if (value.authorDisplayName || value.publishedAt) {
+                <div class="mt-1 text-xs text-gray-500">
+                  @if (value.authorDisplayName) {
+                    <span>{{ value.authorDisplayName }}</span>
+                  }
+                  @if (value.authorDisplayName && value.publishedAt) {
+                    <span class="mx-1 text-gray-300">•</span>
+                  }
+                  @if (value.publishedAt) {
+                    <span>{{ formatDate(value.publishedAt) }}</span>
+                  }
+                </div>
+              }
+            </div>
+            <button
+              type="button"
+              (click)="clear()"
+              class="flex-shrink-0 text-gray-400 hover:text-red-600 transition-colors text-lg leading-none"
+              aria-label="Elimină"
+            >
+              ×
+            </button>
+          </div>
         </div>
       } @else {
         <div class="relative">
@@ -67,9 +84,25 @@ export interface PickedPost {
                 class="w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0"
               >
                 <div class="text-sm font-medium text-gray-800 line-clamp-2">{{ post.title }}</div>
-                @if (post.primaryCategory) {
-                  <div class="text-xs text-gray-400 mt-0.5">{{ post.primaryCategory.name }}</div>
-                }
+                <div class="text-xs text-gray-400 mt-0.5">
+                  @if (post.primaryCategory) {
+                    <span>{{ post.primaryCategory.name }}</span>
+                  }
+                  @if (
+                    post.primaryCategory && (post.authorName || post.author || post.publishedAt)
+                  ) {
+                    <span class="mx-1">•</span>
+                  }
+                  @if (post.authorName || post.author) {
+                    <span>{{ post.authorName || post.author?.displayName }}</span>
+                  }
+                  @if ((post.authorName || post.author) && post.publishedAt) {
+                    <span class="mx-1">•</span>
+                  }
+                  @if (post.publishedAt) {
+                    <span>{{ formatDate(post.publishedAt) }}</span>
+                  }
+                </div>
               </button>
             }
           </div>
@@ -139,7 +172,12 @@ export class PostPickerComponent implements OnDestroy {
     this.open.set(false);
     this.query = '';
     this.results.set([]);
-    this.selected.emit({ id: post.id, title: post.title });
+    this.selected.emit({
+      id: post.id,
+      title: post.title,
+      publishedAt: post.publishedAt,
+      authorDisplayName: post.authorName ?? post.author?.displayName ?? null,
+    });
   }
 
   clear() {
@@ -148,5 +186,13 @@ export class PostPickerComponent implements OnDestroy {
 
   ngOnDestroy() {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
+  }
+
+  formatDate(dateStr: string): string {
+    return new Intl.DateTimeFormat('ro-RO', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date(dateStr));
   }
 }

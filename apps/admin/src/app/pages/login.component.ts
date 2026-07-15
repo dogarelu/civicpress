@@ -61,9 +61,7 @@ import { ToastService } from '../services/toast.service';
         </form>
 
         <p class="text-xs text-gray-400 text-center mt-6">
-          <a href="http://localhost:4200" class="hover:text-gray-600 transition-colors"
-            >← Înapoi la site</a
-          >
+          <a href="/" class="hover:text-gray-600 transition-colors">← Înapoi la site</a>
         </p>
       </div>
     </div>

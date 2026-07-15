@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type { PostSummary } from '@civicpress/shared';
+import { formatPostDateForList } from '../utils/post-date-display';
 
 @Component({
   selector: 'cp-post-card-list',
@@ -28,8 +29,7 @@ import type { PostSummary } from '@civicpress/shared';
           @if (post.primaryCategory) {
             <a
               [routerLink]="['/category', post.primaryCategory.slug]"
-              class="text-xs font-bold uppercase tracking-wider mb-1 inline-block"
-              [style.color]="post.primaryCategory.color ?? 'var(--color-primary)'"
+              class="text-xs font-bold uppercase tracking-wider mb-1 inline-block text-gray-600 hover:text-gray-800 transition-colors"
               >{{ post.primaryCategory.name }}</a
             >
           }
@@ -55,10 +55,6 @@ export class PostCardListComponent {
   @Input() post: PostSummary | null = null;
 
   formatDate(dateStr: string): string {
-    return new Intl.DateTimeFormat('ro-RO', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    }).format(new Date(dateStr));
+    return formatPostDateForList(dateStr);
   }
 }

@@ -23,6 +23,9 @@ const prisma = new PrismaClient({
 
 const BASE_URL = 'https://www.civicpress.ro';
 const STORAGE_ORIG = path.resolve(__dirname, '../apps/backend/storage/media/orig');
+// Base URL the backend serves media from. Inline article images are rewritten to
+// `${MEDIA_BASE}/v1/media/:id/orig` so they load from local storage instead of civicpress.ro.
+const MEDIA_BASE = process.env.MEDIA_BASE_URL || 'http://localhost:3000';
 
 // Canonical 9 menu categories — the source of truth
 const CANONICAL_CATEGORIES = [
@@ -210,6 +213,95 @@ async function saveMedia(url: string, postId: string): Promise<string | null> {
   }
 
   return filename;
+}
+
+function extToMime(ext: string): string {
+  switch (ext.toLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    case '.gif':
+      return 'image/gif';
+    case '.svg':
+      return 'image/svg+xml';
+    default:
+      return 'image/jpeg';
+  }
+}
+
+// Cache by source URL so the same remote image is downloaded once and reused across posts.
+const inlineMediaCache = new Map<string, string>();
+
+/**
+ * Download a single inline image, persist a Media row, and return the local
+ * `${MEDIA_BASE}/v1/media/:id/orig` URL (or null on failure).
+ */
+async function saveInlineImage(
+  url: string,
+  postExtId: string,
+  idx: number,
+): Promise<string | null> {
+  const cached = inlineMediaCache.get(url);
+  if (cached) return cached;
+
+  ensureDir(STORAGE_ORIG);
+  let ext = path.extname(new URL(url).pathname).split('?')[0] || '.jpg';
+  if (!/^\.[a-z0-9]+$/i.test(ext)) ext = '.jpg';
+  const filename = `wp-${postExtId}-inline-${idx}${ext}`;
+  const destPath = path.join(STORAGE_ORIG, filename);
+
+  if (!fs.existsSync(destPath)) {
+    try {
+      console.log(`  [inline-media] downloading: ${url}`);
+      await downloadFile(url, destPath);
+    } catch (e) {
+      console.warn(`  [inline-media] failed to download ${url}: ${e}`);
+      return null;
+    }
+  }
+
+  let media = await prisma.media.findFirst({ where: { path: filename } }).catch(() => null);
+  if (!media) {
+    media = await prisma.media.create({
+      data: { filename, mimeType: extToMime(ext), path: filename },
+    });
+  }
+
+  const localUrl = `${MEDIA_BASE}/v1/media/${media.id}/orig`;
+  inlineMediaCache.set(url, localUrl);
+  return localUrl;
+}
+
+/**
+ * Rewrite every remote <img> in article HTML to a locally-stored copy.
+ * Drops srcset/sizes so no remote variants leak through.
+ */
+async function localizeContentImages(html: string, postExtId: string): Promise<string> {
+  if (!html) return html;
+  const tags = Array.from(new Set(html.match(/<img\b[^>]*>/gi) ?? []));
+  if (tags.length === 0) return html;
+
+  let result = html;
+  let idx = 0;
+  for (const tag of tags) {
+    const srcMatch = tag.match(/\ssrc=["']([^"']+)["']/i);
+    if (!srcMatch) continue;
+    const src = srcMatch[1];
+    // Skip images that are already local/relative.
+    if (!/^https?:\/\//i.test(src)) continue;
+
+    const localUrl = await saveInlineImage(src, postExtId, idx++);
+    if (!localUrl) continue;
+
+    const newTag = tag
+      .replace(/\ssrcset=["'][^"']*["']/i, '')
+      .replace(/\ssizes=["'][^"']*["']/i, '')
+      .replace(/\ssrc=["'][^"']+["']/i, ` src="${localUrl}"`);
+    // split/join performs a global, regex-safe replace of identical tags.
+    result = result.split(tag).join(newTag);
+  }
+  return result;
 }
 
 /**
@@ -409,8 +501,13 @@ async function ingestWpData({
     }
 
     const authorId = post.author ? (userIdMap.get(post.author) ?? null) : null;
+    const authorName = post.author
+      ? users.find((u) => u.id === post.author)?.name?.trim() || null
+      : null;
     const title = post.title.rendered.replace(/<[^>]*>/g, '');
     const excerpt = post.excerpt.rendered.replace(/<[^>]*>/g, '').trim();
+    // Download inline article images locally and rewrite their URLs.
+    const contentHtml = await localizeContentImages(post.content.rendered, extId);
 
     const existing = await prisma.post.findUnique({ where: { externalId: extId } });
     const dbPost = existing
@@ -419,10 +516,11 @@ async function ingestWpData({
           data: {
             title,
             excerpt: excerpt || null,
-            contentHtml: post.content.rendered,
+            contentHtml,
             publishedAt: new Date(post.date),
             heroMediaId: mediaDbId,
             authorId,
+            authorName,
             status: 'PUBLISHED',
           },
         })
@@ -431,10 +529,11 @@ async function ingestWpData({
             title,
             slug: post.slug,
             excerpt: excerpt || null,
-            contentHtml: post.content.rendered,
+            contentHtml,
             publishedAt: new Date(post.date),
             heroMediaId: mediaDbId,
             authorId,
+            authorName,
             status: 'PUBLISHED',
             externalId: extId,
           },
@@ -502,6 +601,16 @@ async function seedSettings() {
       headingFont: 'Roboto',
       bodyFont: 'Open Sans',
       facebookUrl: 'https://www.facebook.com/civicpress.ro/',
+      footerContactInfo:
+        '<p><strong>Email:</strong> redactie@civicpress.ro<br><strong>Telefon:</strong> +40 721 000 000</p>',
+      contactPageHtml:
+        '<h2>Date de contact</h2><p>Email: redactie@civicpress.ro</p><p>Telefon: +40 721 000 000</p>',
+      termsPageHtml:
+        '<h2>Termeni și condiții</h2><p>Completează termenii și condițiile site-ului din Admin &gt; Setări.</p>',
+      privacyPageHtml:
+        '<h2>Protecția datelor – GDPR</h2><p>Completează politica de confidențialitate din Admin &gt; Setări.</p>',
+      cookiePageHtml:
+        '<h2>Politica Cookie</h2><p>Completează politica cookie din Admin &gt; Setări.</p>',
       logoMediaId,
     },
     update: {
@@ -510,13 +619,73 @@ async function seedSettings() {
     },
   });
 
-  await prisma.layoutSetting.upsert({
-    where: { id: 'default' },
-    create: { id: 'default', homeTemplateId: 'home-magazine', categoryTemplateId: 'cat-list' },
-    update: { homeTemplateId: 'home-magazine', categoryTemplateId: 'cat-list' },
-  });
+  // Default page layouts (mirrors the classic magazine look). Created only if
+  // missing so admin-edited layouts survive re-seeding.
+  const defaultLayouts: Record<string, unknown> = {
+    home: {
+      modules: [
+        {
+          id: 'home-hero',
+          type: 'hero',
+          options: {},
+          slots: [{ postId: null, showDate: true, showAuthor: true }],
+        },
+        {
+          id: 'home-grid',
+          type: 'grid',
+          options: {},
+          slots: Array.from({ length: 4 }, () => ({
+            postId: null,
+            showDate: true,
+            showAuthor: true,
+          })),
+        },
+        { id: 'home-list', type: 'list', options: { count: 10 }, slots: [] },
+      ],
+      sidebar: {
+        enabled: true,
+        blocks: ['categories'],
+        slideshowCount: 5,
+        videoCount: 5,
+        slideshowTextPosition: 'on-image',
+        latestSlots: Array.from({ length: 10 }, () => ({ showDate: true, showAuthor: true })),
+        categorySlots: Array.from({ length: 4 }, () => ({ showDate: true, showAuthor: true })),
+      },
+    },
+    category: {
+      modules: [{ id: 'cat-list', type: 'list', options: { count: 15 }, slots: [] }],
+      sidebar: {
+        enabled: false,
+        blocks: ['latest'],
+        slideshowCount: 5,
+        videoCount: 5,
+        slideshowTextPosition: 'on-image',
+        latestSlots: Array.from({ length: 10 }, () => ({ showDate: true, showAuthor: true })),
+        categorySlots: Array.from({ length: 4 }, () => ({ showDate: true, showAuthor: true })),
+      },
+    },
+    article: {
+      modules: [],
+      sidebar: {
+        enabled: false,
+        blocks: ['latest'],
+        slideshowCount: 5,
+        videoCount: 5,
+        slideshowTextPosition: 'on-image',
+        latestSlots: Array.from({ length: 10 }, () => ({ showDate: true, showAuthor: true })),
+        categorySlots: Array.from({ length: 4 }, () => ({ showDate: true, showAuthor: true })),
+      },
+    },
+  };
 
-  console.log('  ✅ SiteSettings + LayoutSetting');
+  for (const [id, config] of Object.entries(defaultLayouts)) {
+    const existing = await prisma.pageLayout.findUnique({ where: { id } });
+    if (!existing) {
+      await prisma.pageLayout.create({ data: { id, config: config as object } });
+    }
+  }
+
+  console.log('  ✅ SiteSettings + PageLayouts');
 }
 
 async function cleanupOrphanCategories() {

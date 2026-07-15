@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  typescript: 5.5.4
-
 importers:
 
   .:
@@ -52,7 +49,7 @@ importers:
         specifier: ^4.22.3
         version: 4.22.3
       typescript:
-        specifier: 5.5.4
+        specifier: ~5.5.4
         version: 5.5.4
 
   apps/admin:
@@ -134,7 +131,7 @@ importers:
         specifier: ^3.4.4
         version: 3.4.19(tsx@4.22.3)(yaml@2.9.0)
       typescript:
-        specifier: 5.5.4
+        specifier: ~5.5.4
         version: 5.5.4
       vite:
         specifier: ^6.3.0
@@ -261,7 +258,7 @@ importers:
         specifier: ^4.22.3
         version: 4.22.3
       typescript:
-        specifier: 5.5.4
+        specifier: ^5.4.5
         version: 5.5.4
 
   apps/public:
@@ -334,7 +331,7 @@ importers:
         specifier: ^3.4.4
         version: 3.4.19(tsx@4.22.3)(yaml@2.9.0)
       typescript:
-        specifier: 5.5.4
+        specifier: ~5.5.4
         version: 5.5.4
       vite:
         specifier: ^6.3.0
@@ -353,7 +350,7 @@ importers:
         specifier: ^8.1.0
         version: 8.5.1(@swc/core@1.15.40)(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.5.4)(yaml@2.9.0)
       typescript:
-        specifier: 5.5.4
+        specifier: ^5.4.5
         version: 5.5.4
 
 packages:
@@ -479,7 +476,7 @@ packages:
       less: ^4.2.0
       postcss: ^8.4.0
       tailwindcss: ^2.0.0 || ^3.0.0
-      typescript: 5.5.4
+      typescript: '>=5.4 <5.6'
     peerDependenciesMeta:
       '@angular/localize':
         optional: true
@@ -519,7 +516,7 @@ packages:
     hasBin: true
     peerDependencies:
       '@angular/compiler': 18.2.14
-      typescript: 5.5.4
+      typescript: '>=5.4 <5.6'
 
   '@angular/compiler@18.2.14':
     resolution: {integrity: sha512-Mpq3v/mztQzGAQAAFV+wAI1hlXxZ0m8eDBgaN2kD3Ue+r4S6bLm1Vlryw0iyUnt05PcFIdxPT6xkcphq5pl6lw==}
@@ -5908,7 +5905,7 @@ packages:
     resolution: {integrity: sha512-i3eMG77UTMD0hZhgRS562pv83RC6ukSAC2GMNWc+9dieh/+jDM5u5YG+NHX6VNDRHQcHwmsTHctP9LhbC3WxVw==}
     engines: {node: '>=16'}
     peerDependencies:
-      typescript: 5.5.4
+      typescript: '>=4.2.0'
 
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
@@ -5923,7 +5920,7 @@ packages:
       '@swc/core': '>=1.2.50'
       '@swc/wasm': '>=1.2.50'
       '@types/node': '*'
-      typescript: 5.5.4
+      typescript: '>=2.7'
     peerDependenciesMeta:
       '@swc/core':
         optional: true
@@ -5935,7 +5932,7 @@ packages:
     engines: {node: ^18 || >=20}
     hasBin: true
     peerDependencies:
-      typescript: 5.5.4
+      typescript: ^5.0.0
     peerDependenciesMeta:
       typescript:
         optional: true
@@ -5955,7 +5952,7 @@ packages:
       '@microsoft/api-extractor': ^7.36.0
       '@swc/core': ^1
       postcss: ^8.4.12
-      typescript: 5.5.4
+      typescript: '>=4.5.0'
     peerDependenciesMeta:
       '@microsoft/api-extractor':
         optional: true

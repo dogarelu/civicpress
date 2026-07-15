@@ -23,12 +23,6 @@ enum PostStatus {
   ARCHIVED
 }
 
-enum HomepageSlotType {
-  HERO
-  GRID
-  LIST
-}
-
 // ─── Site branding ────────────────────────────────────────────────────────────
 
 model SiteSettings {
@@ -44,11 +38,33 @@ model SiteSettings {
   textColor       String  @default("#2d2d2d")
   headingFont     String  @default("Roboto")
   bodyFont        String  @default("Open Sans")
+  headerMaxCategories Int @default(6)
+  headerShowMoreDropdown Boolean @default(true)
+  headerMoreCategoryIds String[] @default([])
+  newsTitleFontSize Int @default(20)
+  newsTitleFontWeight Int @default(700)
+  newsSummaryFontSize Int @default(14)
+  newsSummaryFontWeight Int @default(400)
+  defaultSummaryRows Int @default(3)
+  heroTitleFontSize Int @default(28)
+  heroTitleFontWeight Int @default(800)
+  sidebarTitleFontSize Int @default(13)
+  sidebarTitleFontWeight Int @default(600)
+  articleTitleFontSize Int @default(30)
+  articleTitleFontWeight Int @default(700)
+  articleContentFontSize Int @default(17)
+  articleContentFontWeight Int @default(400)
+  showArticleViews Boolean @default(false)
   facebookUrl     String?
   twitterUrl      String?
   youtubeUrl      String?
   instagramUrl    String?
   footerHtml      String?
+  footerContactInfo String?
+  contactPageHtml String?
+  termsPageHtml   String?
+  privacyPageHtml String?
+  cookiePageHtml  String?
 
   logoMedia    Media? @relation("logo", fields: [logoMediaId], references: [id])
   faviconMedia Media? @relation("favicon", fields: [faviconMediaId], references: [id])
@@ -56,12 +72,12 @@ model SiteSettings {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
-model LayoutSetting {
-  id                      String  @id @default("default")
-  homeTemplateId          String  @default("home-magazine")
-  categoryTemplateId      String  @default("cat-list")
-  homeTemplateOptions     Json?
-  categoryTemplateOptions Json?
+/// One row per page kind: 'home' | 'category' | 'article'.
+/// `config` is a PageLayoutConfig JSON (see @civicpress/shared).
+model PageLayout {
+  id        String   @id
+  config    Json
+  updatedAt DateTime @updatedAt
 }
 
 // ─── Media ────────────────────────────────────────────────────────────────────
@@ -102,14 +118,19 @@ model User {
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
 
-  avatar                  Media?         @relation("userAvatar", fields: [avatarMediaId], references: [id])
-  media                   Media[]        @relation("mediaOwner")
-  posts                   Post[]         @relation("postAuthor")
-  submittedPosts          Post[]         @relation("postSubmitter")
-  approvedPosts           Post[]         @relation("postApprover")
-  revisions               Revision[]
-  auditLogs               AuditLog[]
-  homepageSlotsUpdated    HomepageSlot[] @relation("homepageSlotUpdatedBy")
+  notificationEmail  String?
+  signalNumber       String?
+  notifyReviewEmail  Boolean @default(false)
+  notifyReviewSignal Boolean @default(false)
+  pseudonyms         String[] @default([])
+
+  avatar         Media?     @relation("userAvatar", fields: [avatarMediaId], references: [id])
+  media          Media[]    @relation("mediaOwner")
+  posts          Post[]     @relation("postAuthor")
+  submittedPosts Post[]     @relation("postSubmitter")
+  approvedPosts  Post[]     @relation("postApprover")
+  revisions      Revision[]
+  auditLogs      AuditLog[]
 }
 
 // ─── Category ─────────────────────────────────────────────────────────────────
@@ -128,6 +149,18 @@ model Category {
   parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
   children Category[] @relation("CategoryChildren")
   posts    PostCategory[]
+}
+
+// ─── Pill (image overlay badge) ───────────────────────────────────────────────
+
+model Pill {
+  id        String   @id @default(cuid())
+  text      String
+  color     String
+  textColor String   @default("#ffffff")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  posts     Post[]
 }
 
 // ─── Tag ──────────────────────────────────────────────────────────────────────
@@ -149,8 +182,14 @@ model Post {
   excerpt        String?
   contentHtml    String     @default("")
   heroMediaId    String?
+  pillId         String?
   videoUrl       String?
   authorId       String?
+  authorName     String?
+  showDate       Boolean    @default(true)
+  showAuthor     Boolean    @default(true)
+  showSummary    Boolean    @default(false)
+  viewCount      Int        @default(0)
   status         PostStatus @default(DRAFT)
   scheduledFor   DateTime?
   submittedById  String?
@@ -162,14 +201,16 @@ model Post {
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
 
-  heroMedia      Media?         @relation("heroMedia", fields: [heroMediaId], references: [id])
-  author         User?          @relation("postAuthor", fields: [authorId], references: [id])
-  submittedBy    User?          @relation("postSubmitter", fields: [submittedById], references: [id])
-  approvedBy     User?          @relation("postApprover", fields: [approvedById], references: [id])
-  categories     PostCategory[]
-  tags           PostTag[]
-  revisions      Revision[]
-  homepageSlots  HomepageSlot[]
+  heroMedia   Media?         @relation("heroMedia", fields: [heroMediaId], references: [id])
+  pill        Pill?          @relation(fields: [pillId], references: [id], onDelete: SetNull)
+  author      User?          @relation("postAuthor", fields: [authorId], references: [id])
+  submittedBy User?          @relation("postSubmitter", fields: [submittedById], references: [id])
+  approvedBy  User?          @relation("postApprover", fields: [approvedById], references: [id])
+  categories  PostCategory[]
+  tags        PostTag[]
+  bulbi       PostBulb[] @relation("PostBulbs")
+  bulbOfPosts PostBulb[] @relation("PostBulbLinks")
+  revisions   Revision[]
 }
 
 // ─── Join tables ──────────────────────────────────────────────────────────────
@@ -193,6 +234,19 @@ model PostTag {
   tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
+}
+
+model PostBulb {
+  postId        String
+  linkedPostId  String
+  sortOrder     Int
+  labelOverride String?
+
+  post       Post @relation("PostBulbs", fields: [postId], references: [id], onDelete: Cascade)
+  linkedPost Post @relation("PostBulbLinks", fields: [linkedPostId], references: [id], onDelete: Cascade)
+
+  @@id([postId, linkedPostId])
+  @@index([postId, sortOrder])
 }
 
 // ─── Revision ─────────────────────────────────────────────────────────────────
@@ -232,18 +286,3 @@ model AuditLog {
   @@index([actorId, createdAt])
 }
 
-// ─── Homepage slots ───────────────────────────────────────────────────────────
-
-model HomepageSlot {
-  id          String           @id @default(cuid())
-  slotType    HomepageSlotType
-  position    Int
-  postId      String
-  updatedAt   DateTime         @updatedAt
-  updatedById String?
-
-  post      Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
-  updatedBy User? @relation("homepageSlotUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-
-  @@unique([slotType, position])
-}

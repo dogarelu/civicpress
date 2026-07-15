@@ -10,6 +10,7 @@
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "seed": "tsx ../../scripts/seed.ts",
+    "seed:wp-sql": "tsx ../../scripts/seed-from-wp-sql.ts",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
   },

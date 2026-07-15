@@ -10,6 +10,20 @@
   --color-text: #2d2d2d;
   --font-heading: 'Roboto', sans-serif;
   --font-body: 'Open Sans', sans-serif;
+  --news-title-font-size: 20px;
+  --news-title-font-weight: 700;
+  --news-summary-font-size: 14px;
+  --news-summary-font-weight: 400;
+  --news-summary-line-clamp: 3;
+  --hero-title-font-size: 28px;
+  --hero-title-font-weight: 800;
+  --sidebar-title-font-size: 13px;
+  --sidebar-title-font-weight: 600;
+  --sidebar-video-title-line-clamp: 4;
+  --article-title-font-size: 30px;
+  --article-title-font-weight: 700;
+  --article-content-font-size: 17px;
+  --article-content-font-weight: 400;
 }
 
 * {
@@ -47,7 +61,48 @@ img {
   height: auto;
 }
 
+/*
+ * On wide screens, narrow the page content (not the top menu/header) so a
+ * vertical ad (e.g. 160x600 skyscraper) fits in the free space on each side.
+ * Reserves ~200px per side; content never exceeds 1280px.
+ */
+@media (min-width: 1400px) {
+  .page-container {
+    max-width: min(1280px, calc(100vw - 2 * 200px));
+  }
+}
+
+/* Mobile: clamp article and news title sizes */
+@media (max-width: 767px) {
+  :root {
+    --article-title-font-size: min(var(--article-title-font-size, 30px), 22px);
+    --news-title-font-size: min(var(--news-title-font-size, 20px), 17px);
+    --hero-title-font-size: min(var(--hero-title-font-size, 28px), 20px);
+  }
+}
+
+/* Configurable summary line clamp (set via module typography CSS vars) */
+.news-summary-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-line-clamp: var(--news-summary-line-clamp, 3);
+}
+
+/* Right-column video title line clamp. */
+.sidebar-video-title-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-line-clamp: var(--sidebar-video-title-line-clamp, 4);
+}
+
 /* News content HTML from WP */
+.article-content {
+  font-size: var(--article-content-font-size, 17px);
+  font-weight: var(--article-content-font-weight, 400);
+}
+
 .article-content img {
   max-width: 100%;
   height: auto;
@@ -76,4 +131,52 @@ img {
   margin: 1rem 0;
   font-style: italic;
   color: #555;
+}
+
+/* Exchange rate ticker — continuous horizontal scroll */
+.exchange-ticker {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  background-color: var(--color-primary, #8a0808);
+}
+
+.exchange-ticker--embedded {
+  height: 100%;
+  background-color: transparent;
+}
+
+.exchange-ticker-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5rem;
+  white-space: nowrap;
+  animation: exchange-ticker-scroll 45s linear infinite;
+  will-change: transform;
+}
+
+.exchange-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+@keyframes exchange-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exchange-ticker-track {
+    animation: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0 1rem;
+  }
 }

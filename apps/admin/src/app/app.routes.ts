@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
+import { adminGuard } from './guards/admin.guard';
+import { editorGuard } from './guards/editor.guard';
 
 export const routes: Routes = [
   {
@@ -39,19 +41,45 @@ export const routes: Routes = [
       },
       {
         path: 'categories',
+        canActivate: [editorGuard],
         loadComponent: () =>
           import('./pages/categories/categories-list.component').then(
             (m) => m.CategoriesListComponent,
           ),
       },
       {
+        path: 'pills',
+        canActivate: [editorGuard],
+        loadComponent: () =>
+          import('./pages/pills/pills-list.component').then((m) => m.PillsListComponent),
+      },
+      {
         path: 'audit',
         loadComponent: () => import('./pages/audit.component').then((m) => m.AuditComponent),
       },
       {
-        path: 'homepage',
+        path: 'settings',
+        canActivate: [editorGuard],
+        loadComponent: () => import('./pages/settings.component').then((m) => m.SettingsComponent),
+      },
+      {
+        path: 'notifications',
         loadComponent: () =>
-          import('./pages/homepage/homepage.component').then((m) => m.HomepageComponent),
+          import('./pages/notifications-settings.component').then(
+            (m) => m.NotificationsSettingsComponent,
+          ),
+      },
+      {
+        path: 'layouts',
+        canActivate: [editorGuard],
+        loadComponent: () =>
+          import('./pages/layouts/layouts.component').then((m) => m.LayoutsComponent),
+      },
+      {
+        path: 'users',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./pages/users/users-list.component').then((m) => m.UsersListComponent),
       },
     ],
   },

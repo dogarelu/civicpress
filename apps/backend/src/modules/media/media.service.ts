@@ -6,17 +6,24 @@ import { createReadStream, ReadStream } from 'fs';
 import { Readable } from 'stream';
 import sharp from 'sharp';
 import type { FastifyRequest } from 'fastify';
-import crypto from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 type FileTypeResult = { ext: string; mime: string };
 type FileTypeFromBufferFn = (buf: Buffer) => Promise<FileTypeResult | undefined>;
 let _fileTypeFromBuffer: FileTypeFromBufferFn | null = null;
 
-const STORAGE_DIR = path.resolve(__dirname, '../../../storage/media');
+// Resolve relative to the backend's working directory (apps/backend) rather than
+// __dirname, since the compiled output lives under dist/apps/backend/src/... which
+// would otherwise place storage inside the dist tree and mismatch the seed script.
+const STORAGE_DIR = process.env.MEDIA_STORAGE_DIR
+  ? path.resolve(process.env.MEDIA_STORAGE_DIR)
+  : path.resolve(process.cwd(), 'storage/media');
 const ORIG_DIR = path.join(STORAGE_DIR, 'orig');
 const CACHE_DIR = path.join(STORAGE_DIR, 'cache');
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB for images
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB for video
 
 const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_VIDEO_MIMES = new Set(['video/mp4']);
 
 const VARIANT_WIDTHS: Record<string, number> = {
   '45': 45,
@@ -70,7 +77,7 @@ export class MediaService {
       throw new NotFoundException(`Media file not found on disk: ${id}`);
     }
 
-    if (variant === 'orig' || !VARIANT_WIDTHS[variant]) {
+    if (variant === 'orig' || !VARIANT_WIDTHS[variant] || media.mimeType.startsWith('video/')) {
       const stat = fs.statSync(origPath);
       return { stream: createReadStream(origPath), mimeType: media.mimeType, size: stat.size };
     }
@@ -106,8 +113,8 @@ export class MediaService {
     let totalSize = 0;
     for await (const chunk of fileData.file) {
       totalSize += (chunk as Buffer).length;
-      if (totalSize > MAX_SIZE) {
-        throw new BadRequestException(`File too large (max ${MAX_SIZE / 1024 / 1024}MB)`);
+      if (totalSize > MAX_VIDEO_SIZE) {
+        throw new BadRequestException(`File too large (max ${MAX_VIDEO_SIZE / 1024 / 1024}MB)`);
       }
       chunks.push(chunk as Buffer);
     }
@@ -121,40 +128,57 @@ export class MediaService {
     }
     const detected = await _fileTypeFromBuffer!(buffer);
     const mimeType = detected?.mime || fileData.mimetype;
-    if (!ALLOWED_MIMES.has(mimeType)) {
+    const isVideo = ALLOWED_VIDEO_MIMES.has(mimeType);
+    const isImage = ALLOWED_MIMES.has(mimeType);
+
+    if (!isImage && !isVideo) {
       throw new BadRequestException(`File type not allowed: ${mimeType}`);
+    }
+
+    const maxAllowed = isVideo ? MAX_VIDEO_SIZE : MAX_SIZE;
+    if (buffer.length > maxAllowed) {
+      throw new BadRequestException(`File too large (max ${maxAllowed / 1024 / 1024}MB)`);
     }
 
     ensureDir(ORIG_DIR);
     ensureDir(CACHE_DIR);
 
-    const ext = detected?.ext || 'jpg';
-    const id = crypto.randomBytes(12).toString('hex');
+    const ext = detected?.ext || (isVideo ? 'mp4' : 'jpg');
+    const id = randomBytes(12).toString('hex');
     const filename = `${id}.${ext}`;
     const origPath = path.join(ORIG_DIR, filename);
 
-    // .rotate() applies EXIF orientation; sharp's pipeline strips metadata by default,
-    // and explicitly omitting `.withMetadata(...)` ensures no EXIF survives the round-trip.
-    const sharpInstance = sharp(buffer).rotate();
-    const metadata = await sharpInstance.metadata();
-    await sharpInstance.toFile(origPath);
-
+    let width: number | null = null;
+    let height: number | null = null;
     const variants: Array<{ name: string; width: number; path: string }> = [];
-    for (const v of UPLOAD_VARIANTS) {
-      const variantPath = path.join(CACHE_DIR, `${id}-${v.name}.webp`);
-      await sharp(origPath)
-        .resize({ width: v.width, withoutEnlargement: true })
-        .webp({ quality: 82 })
-        .toFile(variantPath);
-      variants.push({ name: v.name, width: v.width, path: variantPath });
+
+    if (isVideo) {
+      await fs.promises.writeFile(origPath, buffer);
+    } else {
+      // .rotate() applies EXIF orientation; sharp's pipeline strips metadata by default,
+      // and explicitly omitting `.withMetadata(...)` ensures no EXIF survives the round-trip.
+      const sharpInstance = sharp(buffer).rotate();
+      const metadata = await sharpInstance.metadata();
+      width = metadata.width ?? null;
+      height = metadata.height ?? null;
+      await sharpInstance.toFile(origPath);
+
+      for (const v of UPLOAD_VARIANTS) {
+        const variantPath = path.join(CACHE_DIR, `${id}-${v.name}.webp`);
+        await sharp(origPath)
+          .resize({ width: v.width, withoutEnlargement: true })
+          .webp({ quality: 82 })
+          .toFile(variantPath);
+        variants.push({ name: v.name, width: v.width, path: variantPath });
+      }
     }
 
     const media = await this.prisma.media.create({
       data: {
         filename,
         mimeType,
-        width: metadata.width ?? null,
-        height: metadata.height ?? null,
+        width,
+        height,
         sizeBytes: buffer.length,
         path: filename,
         ownerId,

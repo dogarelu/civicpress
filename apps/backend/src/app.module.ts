@@ -14,14 +14,16 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuditInterceptor } from './modules/audit/audit.interceptor';
-import { HomepageModule } from './modules/homepage/homepage.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { PillsModule } from './modules/pills/pills.module';
+import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
 import { JwtAuthGuard } from './common/jwt-auth.guard';
 import { RolesGuard } from './common/roles.guard';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     LoggerModule.forRoot({
       pinoHttp: {
         transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
@@ -39,7 +41,9 @@ import { RolesGuard } from './common/roles.guard';
     MediaModule,
     HealthModule,
     AuditModule,
-    HomepageModule,
+    NotificationsModule,
+    PillsModule,
+    ExchangeRatesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

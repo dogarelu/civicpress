@@ -9,12 +9,10 @@ import type { AdminCategory } from '@civicpress/shared';
 interface EditState {
   name: string;
   slug: string;
-  color: string | null;
   description: string;
+  parentId: string;
   showInMenu: boolean;
 }
-
-const PRIMARY_COLOR = '#b91c1c';
 
 @Component({
   selector: 'cp-categories-list',
@@ -47,7 +45,7 @@ const PRIMARY_COLOR = '#b91c1c';
         <div>
           <h1 class="text-xl font-bold text-gray-800">Categorii</h1>
           <p class="text-sm text-gray-500 mt-0.5">
-            Trage pentru a reordona. Culoarea apare ca accent în articolele din categorie.
+            Trage pentru a reordona categoriile și subcategoriile.
           </p>
         </div>
         <button
@@ -86,24 +84,20 @@ const PRIMARY_COLOR = '#b91c1c';
                 />
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Culoare</label>
-                <div class="flex items-center gap-2">
-                  <input
-                    type="color"
-                    [(ngModel)]="newFormColor"
-                    class="w-9 h-9 rounded cursor-pointer border border-gray-300 p-0.5"
-                  />
-                  <span class="text-sm text-gray-700 font-mono">{{ newFormColor }}</span>
-                  <button
-                    type="button"
-                    (click)="newForm.color = null; newFormColor = PRIMARY_COLOR"
-                    class="text-xs text-gray-400 hover:text-red-600 transition-colors ml-1"
-                  >
-                    Fără culoare
-                  </button>
-                </div>
+                <label class="block text-xs font-medium text-gray-600 mb-1"
+                  >Categorie părinte</label
+                >
+                <select
+                  [(ngModel)]="newForm.parentId"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="">— fără (categorie principală) —</option>
+                  @for (parent of parentOptions(); track parent.id) {
+                    <option [value]="parent.id">{{ parent.name }}</option>
+                  }
+                </select>
               </div>
-              <div class="flex items-center gap-3 pt-5">
+              <div class="flex items-center gap-3 sm:pt-6">
                 <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
                   <input type="checkbox" [(ngModel)]="newForm.showInMenu" class="rounded" />
                   Afișează în meniu
@@ -150,6 +144,7 @@ const PRIMARY_COLOR = '#b91c1c';
             <div
               cdkDrag
               class="cat-row bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
+              [class.ml-8]="!!cat.parentId"
             >
               <!-- Drag placeholder -->
               <div *cdkDragPlaceholder class="drag-placeholder rounded-xl"></div>
@@ -175,24 +170,26 @@ const PRIMARY_COLOR = '#b91c1c';
                       />
                     </div>
                     <div>
-                      <label class="block text-xs font-medium text-gray-600 mb-1">Culoare</label>
-                      <div class="flex items-center gap-2">
-                        <input
-                          type="color"
-                          [(ngModel)]="editFormColor"
-                          class="w-9 h-9 rounded cursor-pointer border border-gray-300 p-0.5"
-                        />
-                        <span class="text-sm text-gray-700 font-mono">{{ editFormColor }}</span>
-                        <button
-                          type="button"
-                          (click)="editForm.color = null; editFormColor = PRIMARY_COLOR"
-                          class="text-xs text-gray-400 hover:text-red-600 transition-colors ml-1"
-                        >
-                          Fără culoare
-                        </button>
-                      </div>
+                      <label class="block text-xs font-medium text-gray-600 mb-1"
+                        >Categorie părinte</label
+                      >
+                      <select
+                        [(ngModel)]="editForm.parentId"
+                        [disabled]="editingCategoryHasChildren()"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 disabled:bg-gray-100 disabled:text-gray-500"
+                      >
+                        <option value="">— fără (categorie principală) —</option>
+                        @for (parent of parentOptions(cat.id); track parent.id) {
+                          <option [value]="parent.id">{{ parent.name }}</option>
+                        }
+                      </select>
+                      @if (editingCategoryHasChildren()) {
+                        <p class="mt-1 text-xs text-amber-700">
+                          O categorie cu subcategorii nu poate deveni subcategorie.
+                        </p>
+                      }
                     </div>
-                    <div class="flex items-center gap-3 pt-5">
+                    <div class="flex items-center gap-3 sm:pt-6">
                       <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
                         <input type="checkbox" [(ngModel)]="editForm.showInMenu" class="rounded" />
                         Afișează în meniu
@@ -253,16 +250,14 @@ const PRIMARY_COLOR = '#b91c1c';
                     </svg>
                   </div>
 
-                  <!-- Color swatch -->
-                  <span
-                    class="flex-shrink-0 w-4 h-4 rounded-full border border-gray-200"
-                    [style.background-color]="cat.color ?? PRIMARY_COLOR"
-                    [title]="cat.color ?? 'Culoarea principală'"
-                  ></span>
-
                   <!-- Name + slug -->
                   <div class="flex-1 min-w-0">
-                    <p class="text-sm font-medium text-gray-800 truncate">{{ cat.name }}</p>
+                    <p class="text-sm font-medium text-gray-800 truncate">
+                      @if (cat.parentId) {
+                        <span class="text-gray-400 mr-1">—</span>
+                      }
+                      {{ cat.name }}
+                    </p>
                     <p class="text-xs text-gray-400 font-mono truncate">{{ cat.slug }}</p>
                   </div>
 
@@ -280,6 +275,13 @@ const PRIMARY_COLOR = '#b91c1c';
                     [class.text-gray-400]="!cat.showInMenu"
                     >{{ cat.showInMenu ? 'Meniu' : 'Ascuns' }}</span
                   >
+                  @if (cat.parentId && parentName(cat.parentId); as pName) {
+                    <span
+                      class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700"
+                    >
+                      Subcategorie: {{ pName }}
+                    </span>
+                  }
 
                   <!-- Edit button -->
                   <button
@@ -387,8 +389,6 @@ export class CategoriesListComponent implements OnInit {
   private api = inject(ApiService);
   private toast = inject(ToastService);
 
-  readonly PRIMARY_COLOR = PRIMARY_COLOR;
-
   loading = signal(true);
   saving = signal(false);
   categories = signal<AdminCategory[]>([]);
@@ -398,10 +398,7 @@ export class CategoriesListComponent implements OnInit {
   deleteTarget = signal<AdminCategory | null>(null);
 
   newForm: EditState = this.blankForm();
-  newFormColor = PRIMARY_COLOR;
-
   editForm: EditState = this.blankForm();
-  editFormColor = PRIMARY_COLOR;
 
   ngOnInit() {
     this.load();
@@ -411,7 +408,7 @@ export class CategoriesListComponent implements OnInit {
     this.loading.set(true);
     this.api.getCategories().subscribe({
       next: (cats) => {
-        this.categories.set(cats);
+        this.categories.set(this.sortForHierarchy(cats));
         this.loading.set(false);
       },
       error: () => {
@@ -422,14 +419,48 @@ export class CategoriesListComponent implements OnInit {
   }
 
   private blankForm(): EditState {
-    return { name: '', slug: '', color: null, description: '', showInMenu: true };
+    return { name: '', slug: '', description: '', parentId: '', showInMenu: true };
+  }
+
+  private sortForHierarchy(cats: AdminCategory[]): AdminCategory[] {
+    const byId = new Map(cats.map((cat) => [cat.id, cat]));
+    const topLevel = cats.filter((cat) => !cat.parentId || !byId.has(cat.parentId));
+    const childrenByParent = new Map<string, AdminCategory[]>();
+    for (const cat of cats) {
+      if (!cat.parentId || !byId.has(cat.parentId)) continue;
+      const siblings = childrenByParent.get(cat.parentId) ?? [];
+      siblings.push(cat);
+      childrenByParent.set(cat.parentId, siblings);
+    }
+    const ordered: AdminCategory[] = [];
+    for (const parent of topLevel) {
+      ordered.push(parent);
+      ordered.push(...(childrenByParent.get(parent.id) ?? []));
+    }
+    return ordered;
+  }
+
+  parentOptions(excludeId?: string): AdminCategory[] {
+    return this.categories().filter((cat) => !cat.parentId && cat.id !== excludeId);
+  }
+
+  parentName(parentId: string): string | null {
+    return this.categories().find((cat) => cat.id === parentId)?.name ?? null;
+  }
+
+  private categoryHasChildren(id: string): boolean {
+    return this.categories().some((cat) => cat.parentId === id);
+  }
+
+  editingCategoryHasChildren(): boolean {
+    const id = this.editingId();
+    return !!id && this.categoryHasChildren(id);
   }
 
   // ─── New category ──────────────────────────────────────────────────────────
 
   startNew() {
     this.newForm = this.blankForm();
-    this.newFormColor = PRIMARY_COLOR;
     this.addingNew.set(true);
     this.editingId.set(null);
   }
@@ -448,8 +479,8 @@ export class CategoriesListComponent implements OnInit {
       .createCategory({
         name: this.newForm.name.trim(),
         slug: this.newForm.slug.trim() || undefined,
-        color: this.newForm.color,
         description: this.newForm.description.trim() || null,
+        parentId: this.newForm.parentId || null,
         showInMenu: this.newForm.showInMenu,
       })
       .subscribe({
@@ -472,11 +503,10 @@ export class CategoriesListComponent implements OnInit {
     this.editForm = {
       name: cat.name,
       slug: cat.slug,
-      color: cat.color,
       description: cat.description ?? '',
+      parentId: cat.parentId ?? '',
       showInMenu: cat.showInMenu,
     };
-    this.editFormColor = cat.color ?? PRIMARY_COLOR;
     this.editingId.set(cat.id);
     this.addingNew.set(false);
   }
@@ -490,13 +520,17 @@ export class CategoriesListComponent implements OnInit {
       this.toast.error('Numele categoriei este obligatoriu.');
       return;
     }
+    if (this.editForm.parentId && this.categoryHasChildren(id)) {
+      this.toast.error('Categoria are subcategorii și nu poate deveni subcategorie.');
+      return;
+    }
     this.saving.set(true);
     this.api
       .updateCategory(id, {
         name: this.editForm.name.trim(),
         slug: this.editForm.slug.trim() || undefined,
-        color: this.editForm.color,
         description: this.editForm.description.trim() || null,
+        parentId: this.editForm.parentId || null,
         showInMenu: this.editForm.showInMenu,
       })
       .subscribe({
@@ -504,9 +538,10 @@ export class CategoriesListComponent implements OnInit {
           this.saving.set(false);
           this.editingId.set(null);
           this.toast.success('Categorie salvată.');
-          this.categories.update((cats) =>
-            cats.map((c) => (c.id === id ? { ...c, ...updated } : c)),
-          );
+          this.categories.update((cats) => {
+            const next = cats.map((c) => (c.id === id ? { ...c, ...updated } : c));
+            return this.sortForHierarchy(next);
+          });
         },
         error: (e) => {
           this.saving.set(false);
@@ -520,6 +555,12 @@ export class CategoriesListComponent implements OnInit {
   onDrop(event: CdkDragDrop<AdminCategory[]>) {
     if (event.previousIndex === event.currentIndex) return;
     const cats = [...this.categories()];
+    const source = cats[event.previousIndex];
+    const target = cats[event.currentIndex];
+    if ((source.parentId ?? null) !== (target.parentId ?? null)) {
+      this.toast.error('Poți reordona doar între categorii de același nivel.');
+      return;
+    }
     moveItemInArray(cats, event.previousIndex, event.currentIndex);
     this.categories.set(cats);
     this.api.reorderCategories(cats.map((c) => c.id)).subscribe({
@@ -546,7 +587,9 @@ export class CategoriesListComponent implements OnInit {
         this.saving.set(false);
         this.deleteTarget.set(null);
         this.toast.success(`Categoria "${cat.name}" a fost ștearsă.`);
-        this.categories.update((cats) => cats.filter((c) => c.id !== cat.id));
+        this.categories.update((cats) =>
+          this.sortForHierarchy(cats.filter((c) => c.id !== cat.id)),
+        );
         if (this.editingId() === cat.id) this.editingId.set(null);
       },
       error: (e) => {

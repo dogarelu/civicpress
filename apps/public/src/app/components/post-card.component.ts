@@ -2,6 +2,7 @@ import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type { PostSummary } from '@civicpress/shared';
+import { formatPostDateForList } from '../utils/post-date-display';
 
 @Component({
   selector: 'cp-post-card',
@@ -26,8 +27,7 @@ import type { PostSummary } from '@civicpress/shared';
           @if (post.primaryCategory && showCategory) {
             <a
               [routerLink]="['/category', post.primaryCategory.slug]"
-              class="text-xs font-bold uppercase tracking-wider mb-1 inline-block"
-              [style.color]="post.primaryCategory.color ?? 'var(--color-primary)'"
+              class="text-xs font-bold uppercase tracking-wider mb-1 inline-block text-gray-600 hover:text-gray-800 transition-colors"
             >
               {{ post.primaryCategory.name }}
             </a>
@@ -45,11 +45,13 @@ import type { PostSummary } from '@civicpress/shared';
           }
           @if (showMeta) {
             <div class="flex items-center gap-2 mt-2 text-xs text-gray-500">
-              @if (post.author) {
-                <span>{{ post.author.displayName }}</span>
+              @if (canShowAuthor(post) && displayAuthor(post); as authorName) {
+                <span>{{ authorName }}</span>
+              }
+              @if (canShowAuthor(post) && canShowDate(post)) {
                 <span>·</span>
               }
-              @if (post.publishedAt) {
+              @if (canShowDate(post)) {
                 <time [dateTime]="post.publishedAt">{{ formatDate(post.publishedAt) }}</time>
               }
             </div>
@@ -67,16 +69,24 @@ export class PostCardComponent {
   @Input() showExcerpt = false;
   @Input() showMeta = false;
 
+  displayAuthor(post: PostSummary): string | null {
+    return post.authorName?.trim() || post.author?.displayName || null;
+  }
+
+  canShowDate(post: PostSummary): boolean {
+    return post.showDate !== false && !!post.publishedAt;
+  }
+
+  canShowAuthor(post: PostSummary): boolean {
+    return post.showAuthor !== false && !!this.displayAuthor(post);
+  }
+
   get cleanExcerpt(): string {
     if (!this.post?.excerpt) return '';
     return this.post.excerpt.replace(/<[^>]*>/g, '').trim();
   }
 
   formatDate(dateStr: string): string {
-    return new Intl.DateTimeFormat('ro-RO', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date(dateStr));
+    return formatPostDateForList(dateStr);
   }
 }

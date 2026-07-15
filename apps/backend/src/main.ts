@@ -2,30 +2,30 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ValidationPipe } from '@nestjs/common';
 import { Logger } from 'nestjs-pino';
-import * as fastifyCookie from '@fastify/cookie';
-import * as fastifyMultipart from '@fastify/multipart';
-import * as fastifyHelmet from '@fastify/helmet';
-import * as fastifyCors from '@fastify/cors';
+import fastifyCookie from '@fastify/cookie';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyCors from '@fastify/cors';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const adapter = new FastifyAdapter({ logger: false });
 
-  adapter.register(fastifyCookie, {
+  adapter.register(fastifyCookie as any, {
     secret: process.env.COOKIE_SECRET || 'civicpress-cookie-secret',
   });
 
-  adapter.register(fastifyMultipart, {
+  adapter.register(fastifyMultipart as any, {
     limits: { fileSize: 10 * 1024 * 1024 },
   });
 
   // Register helmet and cors on the underlying fastify instance before NestJS uses it
-  adapter.register(fastifyHelmet, {
+  adapter.register(fastifyHelmet as any, {
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginEmbedderPolicy: false,
   });
-  adapter.register(fastifyCors, {
+  adapter.register(fastifyCors as any, {
     origin: [
       'http://localhost:4200',
       'http://localhost:4300',

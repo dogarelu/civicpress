@@ -3,11 +3,11 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import type {
   PublicSettings,
-  LayoutPublic,
   MenuItem,
   HomeResponse,
   PostDetail,
   CategoryDetail,
+  PostsFeedResponse,
 } from '@civicpress/shared';
 
 const API_BASE = import.meta.env['VITE_API_BASE_URL'] ?? 'http://localhost:3000';
@@ -18,10 +18,6 @@ export class ApiService {
 
   getSettings(): Observable<PublicSettings> {
     return this.http.get<PublicSettings>(`${API_BASE}/v1/settings/public`);
-  }
-
-  getLayout(): Observable<LayoutPublic> {
-    return this.http.get<LayoutPublic>(`${API_BASE}/v1/layout/public`);
   }
 
   getMenu(): Observable<MenuItem[]> {
@@ -40,6 +36,18 @@ export class ApiService {
     return this.http.get<CategoryDetail>(
       `${API_BASE}/v1/categories/${encodeURIComponent(slug)}?page=${page}&perPage=${perPage}`,
     );
+  }
+
+  getMorePosts(
+    excludeIds: string[],
+    categorySlug?: string,
+    take = 10,
+    hasVideo = false,
+  ): Observable<PostsFeedResponse> {
+    const params = new URLSearchParams({ exclude: excludeIds.join(','), take: String(take) });
+    if (categorySlug) params.set('category', categorySlug);
+    if (hasVideo) params.set('hasVideo', 'true');
+    return this.http.get<PostsFeedResponse>(`${API_BASE}/v1/posts-feed?${params.toString()}`);
   }
 
   mediaUrl(id: string, variant = 'orig'): string {

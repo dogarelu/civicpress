@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Param, Res, StreamableFile, Query, Req } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { MediaService } from './media.service';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { Public } from '../../common/public.decorator';
@@ -15,12 +16,14 @@ export class MediaController {
   constructor(private media: MediaService) {}
 
   @Public()
+  @SkipThrottle()
   @Get(':id')
   async getMeta(@Param('id') id: string) {
     return this.media.getMeta(id);
   }
 
   @Public()
+  @SkipThrottle()
   @Get(':id/:variant')
   async getFile(
     @Param('id') id: string,

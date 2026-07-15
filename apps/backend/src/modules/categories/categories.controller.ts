@@ -29,8 +29,9 @@ export class CategoriesController {
 
   // ─── Admin routes ──────────────────────────────────────────────────────────
 
+  // Authors need the list to pick a category when writing a post
   @Get('admin/categories')
-  @Roles(Role.EDITOR, Role.ADMIN)
+  @Roles(Role.AUTHOR, Role.EDITOR, Role.ADMIN)
   listAdmin() {
     return this.categories.listAdmin();
   }

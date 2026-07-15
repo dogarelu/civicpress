@@ -5,8 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { FastifyReply } from 'fastify';
 import type { CookieSerializeOptions } from '@fastify/cookie';
 
-const ACCESS_TTL = 15 * 60; // 15 min in seconds
-const REFRESH_TTL = 7 * 24 * 60 * 60; // 7 days
+const ACCESS_TTL = parseInt(process.env.JWT_ACCESS_TTL ?? '3600', 10); // 1 hour
+const REFRESH_TTL = parseInt(process.env.JWT_REFRESH_TTL ?? String(30 * 24 * 60 * 60), 10); // 30 days
 
 interface JwtPayload {
   sub: string;

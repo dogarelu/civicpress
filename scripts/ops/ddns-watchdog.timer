@@ -1,0 +1,11 @@
+[Unit]
+Description=Run CivicPress DDNS watchdog every 2 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+Unit=ddns-watchdog.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target

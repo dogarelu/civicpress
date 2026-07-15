@@ -9,12 +9,80 @@ import {
   SimpleChanges,
   ViewChild,
   ElementRef,
+  inject,
 } from '@angular/core';
-import { Editor } from '@tiptap/core';
+import { Editor, Mark, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
+import { ApiService } from '../services/api.service';
+import { ToastService } from '../services/toast.service';
+
+const Underline = Mark.create({
+  name: 'underline',
+  parseHTML() {
+    return [
+      { tag: 'u' },
+      {
+        style: 'text-decoration',
+        getAttrs: (value) =>
+          typeof value === 'string' && value.includes('underline') ? {} : false,
+      },
+      {
+        style: 'text-decoration-line',
+        getAttrs: (value) =>
+          typeof value === 'string' && value.includes('underline') ? {} : false,
+      },
+    ];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['u', mergeAttributes(HTMLAttributes), 0];
+  },
+  addCommands() {
+    return {
+      setUnderline:
+        () =>
+        ({ commands }) =>
+          commands.setMark(this.name),
+      toggleUnderline:
+        () =>
+        ({ commands }) =>
+          commands.toggleMark(this.name),
+      unsetUnderline:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+    };
+  },
+  addKeyboardShortcuts() {
+    return {
+      'Mod-u': () => this.editor.commands.toggleUnderline(),
+    };
+  },
+});
+
+const TextColor = Mark.create({
+  name: 'textColor',
+  addAttributes() {
+    return {
+      color: {
+        default: null,
+        parseHTML: (element) => element.style.color || null,
+        renderHTML: (attributes) => {
+          if (!attributes['color']) return {};
+          return { style: `color: ${attributes['color']}` };
+        },
+      },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[style*="color"]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes), 0];
+  },
+});
 
 @Component({
   selector: 'cp-rich-text-editor',
@@ -28,6 +96,9 @@ import Placeholder from '@tiptap/extension-placeholder';
       .tiptap-editor :global(.ProseMirror) {
         outline: none;
         min-height: 24rem;
+      }
+      .tiptap-editor :global(.ProseMirror p) {
+        margin: 0;
       }
       .tiptap-editor :global(.ProseMirror p.is-editor-empty:first-child::before) {
         content: attr(data-placeholder);
@@ -63,6 +134,78 @@ import Placeholder from '@tiptap/extension-placeholder';
         margin: 0 2px;
         align-self: center;
       }
+      .color-picker {
+        width: 26px;
+        height: 26px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        cursor: pointer;
+        padding: 1px;
+        background: #fff;
+      }
+      .link-popover-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 40;
+      }
+      .link-popover {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(28rem, calc(100vw - 2rem));
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 20px 35px rgba(0, 0, 0, 0.15);
+        z-index: 50;
+        padding: 1rem;
+      }
+      .link-popover-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: 1.75rem;
+        height: 1.75rem;
+        border: none;
+        border-radius: 9999px;
+        background: transparent;
+        color: #b91c1c;
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+      }
+      .link-popover-close:hover {
+        background: #fee2e2;
+      }
+      .link-popover-input {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 0.5rem 0.625rem;
+        font-size: 0.875rem;
+      }
+      .link-popover-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+      }
+      .link-popover-btn {
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 0.375rem 0.75rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        background: #fff;
+      }
+      .link-popover-btn.primary {
+        border-color: #7f1d1d;
+        color: #fff;
+        background: #991b1b;
+      }
     `,
   ],
   template: `
@@ -91,6 +234,32 @@ import Placeholder from '@tiptap/extension-placeholder';
           style="font-style:italic"
         >
           I
+        </button>
+        <button
+          type="button"
+          class="toolbar-btn"
+          [class.active]="isUnderline"
+          (click)="cmd('toggleUnderline')"
+          title="Underline"
+          style="text-decoration:underline"
+        >
+          U
+        </button>
+        <input
+          type="color"
+          class="color-picker"
+          [value]="currentTextColor"
+          (input)="onTextColorInput($event)"
+          title="Text color"
+        />
+        <button
+          type="button"
+          class="toolbar-btn"
+          [class.active]="hasTextColor"
+          (click)="clearTextColor()"
+          title="Clear text color"
+        >
+          A
         </button>
         <button
           type="button"
@@ -223,20 +392,38 @@ import Placeholder from '@tiptap/extension-placeholder';
             <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
           </svg>
         </button>
-        <button type="button" class="toolbar-btn" (click)="insertImage()" title="Image URL">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <polyline points="21 15 16 10 5 21" />
-          </svg>
+        <button
+          type="button"
+          class="toolbar-btn"
+          [class.active]="uploadingImage"
+          [disabled]="uploadingImage"
+          (click)="insertImage()"
+          title="Încarcă imagine"
+        >
+          @if (uploadingImage) {
+            <span style="font-size:11px">…</span>
+          } @else {
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          }
         </button>
+        <input
+          #imageInput
+          type="file"
+          accept="image/*"
+          class="hidden"
+          (change)="onImageSelected($event)"
+        />
         <div class="toolbar-sep"></div>
         <button type="button" class="toolbar-btn" (click)="cmd('undo')" title="Undo">
           <svg
@@ -272,17 +459,61 @@ import Placeholder from '@tiptap/extension-placeholder';
         (click)="focusEditor()"
       ></div>
     </div>
+    @if (showLinkPopover) {
+      <button
+        type="button"
+        class="link-popover-backdrop"
+        (click)="closeLinkPopover()"
+        aria-label="Închide fereastra de link"
+      ></button>
+      <div class="link-popover" role="dialog" aria-modal="true" aria-label="Setează link">
+        <button
+          type="button"
+          class="link-popover-close"
+          (click)="removeLink()"
+          title="Șterge link-ul"
+          aria-label="Șterge link-ul"
+        >
+          ×
+        </button>
+        <div class="text-sm font-semibold text-gray-800 mb-2">Link URL</div>
+        <input
+          class="link-popover-input"
+          type="url"
+          placeholder="https://example.com"
+          [value]="pendingLinkUrl"
+          (input)="pendingLinkUrl = ($any($event.target).value || '').trim()"
+          (keydown.enter)="applyLink()"
+        />
+        <div class="link-popover-actions">
+          <button type="button" class="link-popover-btn" (click)="closeLinkPopover()">
+            Anulează
+          </button>
+          <button type="button" class="link-popover-btn primary" (click)="applyLink()">
+            Salvează
+          </button>
+        </div>
+      </div>
+    }
   `,
 })
 export class RichTextEditorComponent implements AfterViewInit, OnDestroy, OnChanges {
   @Input() html = '';
   @Output() htmlChange = new EventEmitter<string>();
   @ViewChild('editorHost') hostRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('imageInput') imageInputRef!: ElementRef<HTMLInputElement>;
 
   private editor?: Editor;
+  private api = inject(ApiService);
+  private toast = inject(ToastService);
+
+  uploadingImage = false;
 
   isBold = false;
   isItalic = false;
+  isUnderline = false;
+  hasTextColor = false;
+  currentTextColor = '#111111';
   isStrike = false;
   isH1 = false;
   isH2 = false;
@@ -291,6 +522,9 @@ export class RichTextEditorComponent implements AfterViewInit, OnDestroy, OnChan
   isOrderedList = false;
   isBlockquote = false;
   isCode = false;
+  showLinkPopover = false;
+  pendingLinkUrl = '';
+  private savedLinkSelection: { from: number; to: number } | null = null;
 
   ngAfterViewInit() {
     this.editor = new Editor({
@@ -299,6 +533,8 @@ export class RichTextEditorComponent implements AfterViewInit, OnDestroy, OnChan
         StarterKit,
         Link.configure({ openOnClick: false }),
         Image,
+        Underline,
+        TextColor,
         Placeholder.configure({ placeholder: 'Conținutul articolului...' }),
       ],
       content: this.html,
@@ -346,20 +582,151 @@ export class RichTextEditorComponent implements AfterViewInit, OnDestroy, OnChan
   }
 
   insertLink() {
-    const url = prompt('URL link:');
-    if (!url) return;
-    this.editor?.chain().focus().setLink({ href: url, target: '_blank' }).run();
+    if (!this.editor) return;
+    const { from, to } = this.editor.state.selection;
+    this.savedLinkSelection = { from, to };
+    this.pendingLinkUrl = this.getLinkHrefForSelection(this.savedLinkSelection);
+    this.showLinkPopover = true;
+  }
+
+  applyLink() {
+    const editor = this.editor;
+    if (!editor) return;
+    const href = this.pendingLinkUrl.trim();
+    if (!href) {
+      this.removeLink();
+      return;
+    }
+    let chain = editor.chain().focus();
+    if (this.savedLinkSelection) {
+      chain = chain.setTextSelection(this.savedLinkSelection);
+    }
+    chain.setLink({ href, target: '_blank' }).run();
+    this.closeLinkPopover();
+  }
+
+  removeLink() {
+    const editor = this.editor;
+    if (!editor) return;
+    const selection = this.savedLinkSelection ?? {
+      from: editor.state.selection.from,
+      to: editor.state.selection.to,
+    };
+    this.runLinkCommandWithNearbySelections(selection, (chain) =>
+      chain.extendMarkRange('link').unsetLink(),
+    );
+    this.closeLinkPopover();
+  }
+
+  closeLinkPopover() {
+    this.showLinkPopover = false;
+    this.pendingLinkUrl = '';
+    this.savedLinkSelection = null;
+  }
+
+  private getLinkHrefForSelection(selection: { from: number; to: number }): string {
+    const editor = this.editor;
+    if (!editor) return '';
+
+    let href = '';
+    this.runLinkCommandWithNearbySelections(
+      selection,
+      (chain) => chain.extendMarkRange('link'),
+      () => {
+        href = (editor.getAttributes('link')['href'] as string | undefined) ?? '';
+      },
+      () => editor.isActive('link'),
+    );
+    return href;
+  }
+
+  private runLinkCommandWithNearbySelections(
+    selection: { from: number; to: number },
+    command: (chain: ReturnType<Editor['chain']>) => ReturnType<Editor['chain']>,
+    onSuccess?: () => void,
+    isSuccessful?: (didRun: boolean) => boolean,
+  ): boolean {
+    const editor = this.editor;
+    if (!editor) return false;
+
+    const positions = this.buildSelectionAttempts(selection, editor.state.doc.content.size);
+    for (const candidate of positions) {
+      const chain = editor.chain().focus().setTextSelection(candidate);
+      const didRun = command(chain).run();
+      if (isSuccessful?.(didRun) ?? didRun) {
+        onSuccess?.();
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private buildSelectionAttempts(
+    selection: { from: number; to: number },
+    docSize: number,
+  ): Array<{ from: number; to: number }> {
+    const boundedFrom = Math.max(1, Math.min(selection.from, docSize));
+    const boundedTo = Math.max(1, Math.min(selection.to, docSize));
+    const attempts: Array<{ from: number; to: number }> = [{ from: boundedFrom, to: boundedTo }];
+
+    if (boundedFrom === boundedTo) {
+      attempts.push({ from: Math.max(1, boundedFrom - 1), to: Math.max(1, boundedTo - 1) });
+      attempts.push({
+        from: Math.min(docSize, boundedFrom + 1),
+        to: Math.min(docSize, boundedTo + 1),
+      });
+    }
+
+    return attempts;
+  }
+
+  setTextColor(color: string) {
+    this.currentTextColor = color;
+    this.editor?.chain().focus().setMark('textColor', { color }).run();
+  }
+
+  onTextColorInput(event: Event) {
+    this.setTextColor((event.target as HTMLInputElement).value);
+  }
+
+  clearTextColor() {
+    this.editor?.chain().focus().unsetMark('textColor').run();
   }
 
   insertImage() {
-    const url = prompt('URL imagine:');
-    if (!url) return;
-    this.editor?.chain().focus().setImage({ src: url }).run();
+    // Open the file picker; the selected file is uploaded to local media storage
+    // and the returned local URL is inserted into the document.
+    this.imageInputRef?.nativeElement.click();
+  }
+
+  onImageSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    this.uploadingImage = true;
+    this.api.uploadMedia(file).subscribe({
+      next: (media) => {
+        this.editor?.chain().focus().setImage({ src: media.url }).run();
+        this.uploadingImage = false;
+        this.toast.success('Imagine încărcată');
+      },
+      error: (e: { error?: { message?: string } }) => {
+        this.uploadingImage = false;
+        this.toast.error(e?.error?.message || 'Eroare la încărcarea imaginii');
+      },
+    });
   }
 
   private syncActiveStates(editor: Editor) {
     this.isBold = editor.isActive('bold');
     this.isItalic = editor.isActive('italic');
+    this.isUnderline = editor.isActive('underline');
+    this.hasTextColor = editor.isActive('textColor');
+    const textColor = editor.getAttributes('textColor')['color'] as string | undefined;
+    this.currentTextColor = this.normalizeColorToHex(textColor) ?? '#111111';
     this.isStrike = editor.isActive('strike');
     this.isH1 = editor.isActive('heading', { level: 1 });
     this.isH2 = editor.isActive('heading', { level: 2 });
@@ -368,5 +735,23 @@ export class RichTextEditorComponent implements AfterViewInit, OnDestroy, OnChan
     this.isOrderedList = editor.isActive('orderedList');
     this.isBlockquote = editor.isActive('blockquote');
     this.isCode = editor.isActive('code');
+  }
+
+  private normalizeColorToHex(color: string | undefined): string | null {
+    if (!color) return null;
+    const normalized = color.trim().toLowerCase();
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalized)) {
+      if (normalized.length === 4) {
+        return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
+      }
+      return normalized;
+    }
+
+    const rgbMatch = normalized.match(/^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})/);
+    if (!rgbMatch) return null;
+
+    const [r, g, b] = rgbMatch.slice(1, 4).map((v) => Number(v));
+    if ([r, g, b].some((v) => Number.isNaN(v) || v < 0 || v > 255)) return null;
+    return `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
   }
 }

@@ -1,5 +1,11 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LayoutService } from '../layout/layout.service';
 import { mapPostSummary } from '../posts/posts.mapper';
 import type { CategoryCreate, CategoryUpdate } from '@civicpress/shared';
 
@@ -14,44 +20,121 @@ function slugify(text: string): string {
 
 @Injectable()
 export class CategoriesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private layout: LayoutService,
+  ) {}
+
+  private async normalizeParentId(parentId: string | null | undefined, categoryId?: string) {
+    if (parentId === undefined) return undefined;
+    if (parentId === null) return null;
+    if (categoryId && parentId === categoryId) {
+      throw new BadRequestException('O categorie nu poate fi propriul părinte.');
+    }
+    const parent = await this.prisma.category.findUnique({
+      where: { id: parentId },
+      select: { id: true, parentId: true },
+    });
+    if (!parent) {
+      throw new NotFoundException(`Categoria părinte nu există: ${parentId}`);
+    }
+    if (parent.parentId) {
+      throw new BadRequestException('Doar categoriile principale pot avea subcategorii.');
+    }
+    return parent.id;
+  }
+
+  private async assertCanBecomeSubcategory(categoryId: string) {
+    const childCount = await this.prisma.category.count({ where: { parentId: categoryId } });
+    if (childCount > 0) {
+      throw new BadRequestException(
+        'Categoria are deja subcategorii și nu poate deveni subcategorie.',
+      );
+    }
+  }
 
   async getMenu() {
     const cats = await this.prisma.category.findMany({
       where: { showInMenu: true },
       orderBy: { menuOrder: 'asc' },
     });
-    return cats.map((c) => ({
-      id: c.id,
-      name: c.name,
-      slug: c.slug,
-      color: c.color,
-      menuOrder: c.menuOrder,
-    }));
+    const byId = new Map(cats.map((cat) => [cat.id, cat]));
+    const childrenByParent = new Map<string, typeof cats>();
+
+    for (const cat of cats) {
+      if (!cat.parentId || !byId.has(cat.parentId)) continue;
+      const siblings = childrenByParent.get(cat.parentId) ?? [];
+      siblings.push(cat);
+      childrenByParent.set(cat.parentId, siblings);
+    }
+
+    return cats
+      .filter((cat) => !cat.parentId || !byId.has(cat.parentId))
+      .map((cat) => {
+        const children = (childrenByParent.get(cat.id) ?? []).map((child) => ({
+          id: child.id,
+          name: child.name,
+          slug: child.slug,
+          color: child.color,
+          menuOrder: child.menuOrder,
+        }));
+        return {
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug,
+          color: cat.color,
+          menuOrder: cat.menuOrder,
+          ...(children.length ? { children } : {}),
+        };
+      });
   }
 
   async getBySlug(slug: string, page = 1, perPage = 15) {
-    const category = await this.prisma.category.findUnique({ where: { slug } });
+    const category = await this.prisma.category.findUnique({
+      where: { slug },
+      include: {
+        parent: { select: { id: true, name: true, slug: true, color: true } },
+        children: {
+          select: { id: true, name: true, slug: true, color: true, menuOrder: true },
+          orderBy: { menuOrder: 'asc' },
+        },
+      },
+    });
     if (!category) throw new NotFoundException(`Category not found: ${slug}`);
 
+    const isVideoCategory = slug === 'video';
     const skip = (page - 1) * perPage;
+    const categoryIds = [category.id, ...category.children.map((child) => child.id)];
 
-    const [total, posts] = await Promise.all([
-      this.prisma.post.count({
-        where: { status: 'PUBLISHED', categories: { some: { categoryId: category.id } } },
-      }),
+    const postWhere = {
+      status: 'PUBLISHED' as const,
+      categories: { some: { categoryId: { in: categoryIds } } },
+      ...(isVideoCategory ? { videoUrl: { not: null } } : {}),
+    };
+
+    const [total, posts, resolved, categoryLayoutConfig] = await Promise.all([
+      this.prisma.post.count({ where: postWhere }),
       this.prisma.post.findMany({
-        where: { status: 'PUBLISHED', categories: { some: { categoryId: category.id } } },
+        where: postWhere,
         orderBy: { publishedAt: 'desc' },
         skip,
         take: perPage,
         include: {
           heroMedia: true,
+          pill: true,
           author: true,
           categories: { include: { category: true } },
         },
       }),
+      // Video category uses its own template; other categories use module layout on page 1.
+      page === 1 && !isVideoCategory
+        ? this.layout.resolveCategoryLayout(category.id)
+        : Promise.resolve(null),
+      !isVideoCategory ? this.layout.getConfig('category') : Promise.resolve(null),
     ]);
+
+    const categoryListModule = categoryLayoutConfig?.modules.find((mod) => mod.type === 'list');
+    const showSummary = categoryListModule?.options?.showSummary ?? true;
 
     return {
       id: category.id,
@@ -59,10 +142,22 @@ export class CategoriesService {
       slug: category.slug,
       color: category.color,
       description: category.description,
-      posts: posts.map(mapPostSummary),
+      parent: category.parent,
+      subcategories: category.children.map((child) => ({
+        id: child.id,
+        name: child.name,
+        slug: child.slug,
+        color: child.color,
+        menuOrder: child.menuOrder,
+      })),
+      posts: posts.map((post) => mapPostSummary(post, { forceShowSummary: true })),
       total,
       page,
       perPage,
+      modules: resolved?.modules ?? null,
+      showSummary,
+      sidebar: resolved?.sidebar ?? null,
+      mobileOrder: resolved?.mobileOrder ?? [],
     };
   }
 
@@ -79,6 +174,7 @@ export class CategoriesService {
       slug: c.slug,
       color: c.color,
       description: c.description,
+      parentId: c.parentId,
       showInMenu: c.showInMenu,
       menuOrder: c.menuOrder,
       postCount: c._count.posts,
@@ -88,6 +184,7 @@ export class CategoriesService {
   async createCategory(data: CategoryCreate) {
     const slug = data.slug ?? slugify(data.name);
     const max = await this.prisma.category.aggregate({ _max: { menuOrder: true } });
+    const parentId = await this.normalizeParentId(data.parentId, undefined);
 
     try {
       return await this.prisma.category.create({
@@ -96,6 +193,7 @@ export class CategoriesService {
           slug,
           color: data.color ?? null,
           description: data.description ?? null,
+          parentId: parentId ?? null,
           showInMenu: data.showInMenu ?? true,
           menuOrder: (max._max.menuOrder ?? 0) + 1,
         },
@@ -114,6 +212,10 @@ export class CategoriesService {
     if (!existing) throw new NotFoundException(`Category not found: ${id}`);
 
     const slug = data.slug !== undefined ? data.slug : undefined;
+    const parentId = await this.normalizeParentId(data.parentId, id);
+    if (parentId !== undefined && parentId !== null) {
+      await this.assertCanBecomeSubcategory(id);
+    }
 
     try {
       return await this.prisma.category.update({
@@ -123,6 +225,7 @@ export class CategoriesService {
           ...(slug !== undefined ? { slug } : {}),
           ...(data.color !== undefined ? { color: data.color } : {}),
           ...(data.description !== undefined ? { description: data.description } : {}),
+          ...(parentId !== undefined ? { parentId } : {}),
           ...(data.showInMenu !== undefined ? { showInMenu: data.showInMenu } : {}),
         },
       });

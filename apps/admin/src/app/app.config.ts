@@ -1,21 +1,15 @@
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { APP_BASE_HREF } from '@angular/common';
 import { provideRouter } from '@angular/router';
-import {
-  provideHttpClient,
-  withFetch,
-  withInterceptors,
-  HttpInterceptorFn,
-} from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
-
-const withCredentialsInterceptor: HttpInterceptorFn = (req, next) => {
-  return next(req.clone({ withCredentials: true }));
-};
+import { authInterceptor } from './interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZoneChangeDetection({ eventCoalescing: true }),
+    { provide: APP_BASE_HREF, useValue: '/admin/' },
     provideRouter(routes),
-    provideHttpClient(withFetch(), withInterceptors([withCredentialsInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
   ],
 };

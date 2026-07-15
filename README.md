@@ -70,20 +70,19 @@ apps/
     src/app/
       pages/
         (layout).page.ts      — Root layout (top-bar, logo, menu, footer)
-        (layout).server.ts    — Loads /v1/settings/public + /v1/menu + /v1/layout/public SSR
+        (layout).server.ts    — Loads /v1/settings/public + /v1/menu SSR
         (layout)/
-          index.page.ts       — Home page (/)
-          index.server.ts     — Loads /v1/home + /v1/layout/public SSR
-          [slug].page.ts      — Article page (/:slug)
+          index.page.ts       — Home page (/) — renders the configured module layout
+          index.server.ts     — Loads /v1/home SSR (resolved modules + sidebar)
+          [slug].page.ts      — Article page (/:slug) with optional second column
           [slug].server.ts    — Loads /v1/posts/:slug SSR
           category/
             [slug].page.ts    — Category page (/category/:slug)
-            [slug].server.ts  — Loads /v1/categories/:slug + /v1/layout/public SSR
+            [slug].server.ts  — Loads /v1/categories/:slug SSR (modules on page 1)
+      components/modules/     — Layout module renderer (hero, hero-list, grid, list, sidebar)
       layout/
-        registry.ts           — Template registry (TemplateDef type + TEMPLATES array)
         templates/
-          home-magazine.component.ts  — Default home magazine layout
-          cat-list.component.ts       — Default category list layout
+          cat-list.component.ts       — Category page (modules on page 1, plain list after)
   admin/     — Angular 18 (Vite) — admin panel
     src/app/
       pages/

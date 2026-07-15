@@ -1,0 +1,10 @@
+[Unit]
+Description=CivicPress DDNS watchdog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/dan-dogaru/civicpress
+EnvironmentFile=/home/dan-dogaru/civicpress/scripts/ops/ddns-watchdog.env
+ExecStart=/home/dan-dogaru/civicpress/scripts/ops/ddns-watchdog.sh

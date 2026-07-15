@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Query, HttpCode } from '@nestjs/common';
 import { PostsService } from './posts.service';
-import { HomepageService } from '../homepage/homepage.service';
+import { LayoutService } from '../layout/layout.service';
 import { Public } from '../../common/public.decorator';
 import { CurrentUser } from '../../common/current-user.decorator';
 import { Role, PostStatus } from '@prisma/client';
@@ -15,7 +15,7 @@ interface JwtPayload {
 export class PostsController {
   constructor(
     private posts: PostsService,
-    private homepage: HomepageService,
+    private layout: LayoutService,
   ) {}
 
   // ─── Public ────────────────────────────────────────────────────────────────
@@ -23,13 +23,24 @@ export class PostsController {
   @Public()
   @Get('home')
   getHome() {
-    return this.homepage.getPublicHome();
+    return this.layout.getPublicHome();
   }
 
   @Public()
   @Get('posts/:slug')
-  getPost(@Param('slug') slug: string) {
-    return this.posts.getBySlug(slug);
+  async getPost(@Param('slug') slug: string) {
+    const post = await this.posts.getBySlug(slug);
+    const layout = await this.layout.getArticleLayout(post.id);
+    return {
+      ...post,
+      modules: layout.modules,
+      sidebar: layout.sidebar,
+      articleMainTypography: layout.articleMainTypography,
+      articleMainShowSummary: layout.articleMainShowSummary,
+      articleMainSummaryRows: layout.articleMainSummaryRows,
+      articleMainSummaryTypography: layout.articleMainSummaryTypography,
+      mobileOrder: layout.mobileOrder,
+    };
   }
 
   // ─── Admin ─────────────────────────────────────────────────────────────────
@@ -83,7 +94,10 @@ export class PostsController {
   transition(
     @Param('id') id: string,
     @Body()
-    body: { action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive'; message?: string },
+    body: {
+      action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive' | 'republish';
+      message?: string;
+    },
     @CurrentUser() user: JwtPayload,
   ) {
     return this.posts.transition(id, body.action, { sub: user.sub, role: user.role }, body.message);

@@ -1,4 +1,5 @@
 import '@angular/platform-server/init';
+import '@angular/compiler';
 import 'zone.js/node';
 import './styles.css';
 import { render } from '@analogjs/router/server';

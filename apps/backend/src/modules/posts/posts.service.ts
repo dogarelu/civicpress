@@ -5,20 +5,32 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { mapPostSummary, mapPostDetail } from './posts.mapper';
+import { mapPostSummary, mapPostDetail, mapPostBulbi } from './posts.mapper';
 import { PostStatus, Role } from '@prisma/client';
-
-const POST_INCLUDE = {
-  heroMedia: true,
-  author: { include: { avatar: true } },
-  categories: { include: { category: true } },
-  tags: { include: { tag: true } },
-} as const;
+import { NotificationsService } from '../notifications/notifications.service';
+import { PillsService } from '../pills/pills.service';
 
 const POST_SUMMARY_INCLUDE = {
   heroMedia: true,
+  pill: true,
   author: true,
   categories: { include: { category: true } },
+} as const;
+
+const POST_BULBI_INCLUDE = {
+  orderBy: { sortOrder: 'asc' as const },
+  include: {
+    linkedPost: { include: POST_SUMMARY_INCLUDE },
+  },
+} as const;
+
+const POST_INCLUDE = {
+  heroMedia: true,
+  pill: true,
+  author: { include: { avatar: true } },
+  categories: { include: { category: true } },
+  tags: { include: { tag: true } },
+  bulbi: POST_BULBI_INCLUDE,
 } as const;
 
 function slugify(title: string): string {
@@ -36,54 +48,22 @@ interface Actor {
   role: Role;
 }
 
+function toDateOrNull(value: string | null | undefined): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
 @Injectable()
 export class PostsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+    private pills: PillsService,
+  ) {}
 
   // ─── Public read ──────────────────────────────────────────────────────────
-
-  async getHome() {
-    const published = { status: PostStatus.PUBLISHED };
-
-    const hero = await this.prisma.post.findFirst({
-      where: published,
-      orderBy: { publishedAt: 'desc' },
-      include: POST_SUMMARY_INCLUDE,
-    });
-
-    const featured = await this.prisma.post.findMany({
-      where: { ...published, id: { not: hero?.id ?? '' } },
-      orderBy: { publishedAt: 'desc' },
-      take: 10,
-      include: POST_SUMMARY_INCLUDE,
-    });
-
-    const menuCategories = await this.prisma.category.findMany({
-      where: { showInMenu: true },
-      orderBy: { menuOrder: 'asc' },
-    });
-
-    const categoryStrips = await Promise.all(
-      menuCategories.map(async (cat) => {
-        const posts = await this.prisma.post.findMany({
-          where: { ...published, categories: { some: { categoryId: cat.id } } },
-          orderBy: { publishedAt: 'desc' },
-          take: 3,
-          include: POST_SUMMARY_INCLUDE,
-        });
-        return {
-          category: { id: cat.id, name: cat.name, slug: cat.slug, color: cat.color },
-          posts: posts.map(mapPostSummary),
-        };
-      }),
-    );
-
-    return {
-      hero: hero ? mapPostSummary(hero) : null,
-      featured: featured.map(mapPostSummary),
-      categoryStrips,
-    };
-  }
 
   async getBySlug(slug: string) {
     const post = await this.prisma.post.findFirst({
@@ -92,23 +72,42 @@ export class PostsService {
     });
     if (!post) throw new NotFoundException(`Post not found: ${slug}`);
 
-    const primaryCat = post.categories.find((c) => c.isPrimary) ?? post.categories[0];
-    const relatedPosts = primaryCat
-      ? await this.prisma.post.findMany({
-          where: {
-            status: PostStatus.PUBLISHED,
-            id: { not: post.id },
-            categories: { some: { categoryId: primaryCat.categoryId } },
-          },
-          orderBy: { publishedAt: 'desc' },
-          take: 3,
-          include: POST_SUMMARY_INCLUDE,
-        })
-      : [];
+    const incremented = await this.prisma.post.update({
+      where: { id: post.id },
+      data: { viewCount: { increment: 1 } },
+      select: { viewCount: true },
+    });
+
+    const postWithViews = { ...post, viewCount: incremented.viewCount };
+
+    const primaryCat =
+      postWithViews.categories.find((c) => c.isPrimary) ?? postWithViews.categories[0];
+    const [relatedPosts, latestPosts] = await Promise.all([
+      primaryCat
+        ? this.prisma.post.findMany({
+            where: {
+              status: PostStatus.PUBLISHED,
+              id: { not: postWithViews.id },
+              categories: { some: { categoryId: primaryCat.categoryId } },
+            },
+            orderBy: { publishedAt: 'desc' },
+            take: 3,
+            include: POST_SUMMARY_INCLUDE,
+          })
+        : Promise.resolve([]),
+      this.prisma.post.findMany({
+        where: { status: PostStatus.PUBLISHED, id: { not: postWithViews.id } },
+        orderBy: { publishedAt: 'desc' },
+        take: 5,
+        include: POST_SUMMARY_INCLUDE,
+      }),
+    ]);
 
     return {
-      ...mapPostDetail(post),
-      relatedPosts: relatedPosts.map(mapPostSummary),
+      ...mapPostDetail(postWithViews),
+      bulbi: mapPostBulbi(postWithViews.bulbi, { publishedOnly: true }),
+      relatedPosts: relatedPosts.map((post) => mapPostSummary(post)),
+      latestPosts: latestPosts.map((post) => mapPostSummary(post)),
     };
   }
 
@@ -129,18 +128,83 @@ export class PostsService {
     if (status) where['status'] = status;
     if (authorId) where['authorId'] = authorId;
     if (actor.role === Role.AUTHOR) where['authorId'] = actor.sub;
-    if (search) where['title'] = { contains: search, mode: 'insensitive' };
+    if (search) {
+      const term = search.trim();
+      if (term) {
+        where['OR'] = [
+          { title: { contains: term, mode: 'insensitive' } },
+          { excerpt: { contains: term, mode: 'insensitive' } },
+        ];
+      }
+    }
 
-    const [total, posts] = await Promise.all([
-      this.prisma.post.count({ where }),
-      this.prisma.post.findMany({
+    const totalPromise = this.prisma.post.count({ where });
+    let postsPromise: Promise<
+      Array<{
+        id: string;
+        title: string;
+        slug: string;
+        status: PostStatus;
+        publishedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+        author: { id: string; displayName: string | null; slug: string | null } | null;
+        authorName: string | null;
+        showDate: boolean;
+        showAuthor: boolean;
+        showSummary: boolean;
+        viewCount: number;
+        categories: Array<{
+          isPrimary: boolean;
+          category: { id: string; name: string; slug: string; color: string | null };
+        }>;
+      }>
+    >;
+
+    if (status) {
+      postsPromise = this.prisma.post.findMany({
         where,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ publishedAt: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }],
         skip,
         take: perPage,
         include: POST_SUMMARY_INCLUDE,
-      }),
-    ]);
+      });
+    } else {
+      postsPromise = (async () => {
+        const draftWhere = { ...where, status: PostStatus.DRAFT };
+        const nonDraftWhere = { ...where, status: { not: PostStatus.DRAFT } };
+        const draftCount = await this.prisma.post.count({ where: draftWhere });
+
+        const draftSkip = Math.min(skip, draftCount);
+        const draftTake = Math.max(0, Math.min(perPage, draftCount - draftSkip));
+
+        const drafts = draftTake
+          ? await this.prisma.post.findMany({
+              where: draftWhere,
+              orderBy: { updatedAt: 'desc' },
+              skip: draftSkip,
+              take: draftTake,
+              include: POST_SUMMARY_INCLUDE,
+            })
+          : [];
+
+        const remainingTake = perPage - drafts.length;
+        if (remainingTake <= 0) return drafts;
+
+        const nonDraftSkip = Math.max(0, skip - draftCount);
+        const nonDrafts = await this.prisma.post.findMany({
+          where: nonDraftWhere,
+          orderBy: [{ publishedAt: { sort: 'desc', nulls: 'last' } }, { updatedAt: 'desc' }],
+          skip: nonDraftSkip,
+          take: remainingTake,
+          include: POST_SUMMARY_INCLUDE,
+        });
+
+        return [...drafts, ...nonDrafts];
+      })();
+    }
+
+    const [total, posts] = await Promise.all([totalPromise, postsPromise]);
 
     return {
       posts: posts.map((p) => ({
@@ -154,6 +218,11 @@ export class PostsService {
         author: p.author
           ? { id: p.author.id, displayName: p.author.displayName, slug: p.author.slug }
           : null,
+        authorName: p.authorName?.trim() || p.author?.displayName || null,
+        showDate: p.showDate,
+        showAuthor: p.showAuthor,
+        showSummary: p.showSummary,
+        viewCount: p.viewCount,
         primaryCategory: this.getPrimaryCategory(
           p.categories as Parameters<typeof this.getPrimaryCategory>[0],
         ),
@@ -187,11 +256,15 @@ export class PostsService {
     const post = await this.prisma.post.findUnique({ where: { id }, include: POST_INCLUDE });
     if (!post) throw new NotFoundException();
     if (actor.role === Role.AUTHOR && post.authorId !== actor.sub) throw new ForbiddenException();
+    const mapped = mapPostDetail(post);
     return {
-      ...mapPostDetail(post),
+      ...mapped,
+      excerpt: post.excerpt,
+      showSummary: post.showSummary,
       status: post.status,
       scheduledFor: post.scheduledFor?.toISOString() ?? null,
       relatedPosts: [],
+      latestPosts: [],
     };
   }
 
@@ -203,6 +276,7 @@ export class PostsService {
       slug?: string;
       excerpt?: string | null;
       contentHtml?: string;
+      publishedAt?: string | null;
       heroMediaId?: string | null;
       videoUrl?: string | null;
       categoryIds?: string[];
@@ -210,11 +284,30 @@ export class PostsService {
       tagIds?: string[];
       seoTitle?: string | null;
       seoDescription?: string | null;
+      authorName?: string | null;
+      showDate?: boolean;
+      showAuthor?: boolean;
+      showSummary?: boolean;
+      pillId?: string | null;
+      pillText?: string | null;
+      pillColor?: string | null;
+      pillTextColor?: string | null;
+      bulbi?: Array<{ postId: string; labelOverride?: string | null }>;
     },
     actor: Actor,
   ) {
     const baseSlug = data.slug || slugify(data.title);
     const slug = await this.findUniqueSlug(baseSlug);
+
+    const uploader = await this.prisma.user.findUnique({
+      where: { id: actor.sub },
+      select: { displayName: true },
+    });
+    const authorName = data.authorName?.trim() || uploader?.displayName || null;
+    const resolvedPillId = await this.resolvePillId(data);
+    const publishedAt = toDateOrNull(data.publishedAt);
+    const normalizedExcerpt = data.excerpt?.trim() ?? '';
+    const fallbackShowSummary = normalizedExcerpt.length > 0;
 
     const post = await this.prisma.post.create({
       data: {
@@ -224,7 +317,13 @@ export class PostsService {
         contentHtml: data.contentHtml ?? '',
         heroMediaId: data.heroMediaId ?? null,
         videoUrl: data.videoUrl ?? null,
+        pillId: resolvedPillId,
         authorId: actor.sub,
+        authorName,
+        showDate: data.showDate ?? true,
+        showAuthor: data.showAuthor ?? true,
+        showSummary: data.showSummary ?? fallbackShowSummary,
+        publishedAt: publishedAt ?? null,
         status: PostStatus.DRAFT,
         seoTitle: data.seoTitle ?? null,
         seoDescription: data.seoDescription ?? null,
@@ -233,6 +332,7 @@ export class PostsService {
 
     await this.syncCategories(post.id, data.categoryIds ?? [], data.primaryCategoryId ?? null);
     await this.syncTags(post.id, data.tagIds ?? []);
+    await this.syncBulbi(post.id, data.bulbi ?? [], null);
     await this.createRevision(post.id, actor.sub, 'Initial draft');
 
     return this.getByIdAdmin(post.id, actor);
@@ -246,6 +346,7 @@ export class PostsService {
       title?: string;
       excerpt?: string | null;
       contentHtml?: string;
+      publishedAt?: string | null;
       heroMediaId?: string | null;
       videoUrl?: string | null;
       categoryIds?: string[];
@@ -254,6 +355,15 @@ export class PostsService {
       seoTitle?: string | null;
       seoDescription?: string | null;
       slug?: string;
+      authorName?: string | null;
+      showDate?: boolean;
+      showAuthor?: boolean;
+      showSummary?: boolean;
+      pillId?: string | null;
+      pillText?: string | null;
+      pillColor?: string | null;
+      pillTextColor?: string | null;
+      bulbi?: Array<{ postId: string; labelOverride?: string | null }>;
     },
     actor: Actor,
   ) {
@@ -273,17 +383,47 @@ export class PostsService {
       );
     }
 
+    const resolvedPillId =
+      data.pillId !== undefined ||
+      data.pillText !== undefined ||
+      data.pillColor !== undefined ||
+      data.pillTextColor !== undefined
+        ? await this.resolvePillId(data)
+        : undefined;
+    const publishedAt = toDateOrNull(data.publishedAt);
+    const excerptShowSummaryFallback =
+      data.excerpt !== undefined ? (data.excerpt?.trim().length ?? 0) > 0 : undefined;
+    const slug =
+      data.slug !== undefined
+        ? await this.findUniqueSlug(
+            data.slug.trim() || slugify(data.title ?? post.title) || 'post',
+            id,
+          )
+        : undefined;
+
     const updated = await this.prisma.post.update({
       where: { id },
       data: {
         ...(data.title !== undefined ? { title: data.title } : {}),
         ...(data.excerpt !== undefined ? { excerpt: data.excerpt } : {}),
         ...(data.contentHtml !== undefined ? { contentHtml: data.contentHtml } : {}),
+        ...(publishedAt !== undefined ? { publishedAt } : {}),
         ...(data.heroMediaId !== undefined ? { heroMediaId: data.heroMediaId } : {}),
         ...(data.videoUrl !== undefined ? { videoUrl: data.videoUrl } : {}),
         ...(data.seoTitle !== undefined ? { seoTitle: data.seoTitle } : {}),
         ...(data.seoDescription !== undefined ? { seoDescription: data.seoDescription } : {}),
-        ...(data.slug !== undefined ? { slug: data.slug } : {}),
+        ...(slug !== undefined ? { slug } : {}),
+        ...(data.authorName !== undefined
+          ? { authorName: data.authorName?.trim() ? data.authorName.trim() : null }
+          : {}),
+        ...(data.showDate !== undefined ? { showDate: data.showDate } : {}),
+        ...(data.showAuthor !== undefined ? { showAuthor: data.showAuthor } : {}),
+        ...(data.showSummary !== undefined
+          ? { showSummary: data.showSummary }
+          : excerptShowSummaryFallback !== undefined
+            ? { showSummary: excerptShowSummaryFallback }
+            : {}),
+        ...(resolvedPillId !== undefined ? { pillId: resolvedPillId } : {}),
       },
     });
 
@@ -292,6 +432,9 @@ export class PostsService {
     }
     if (data.tagIds !== undefined) {
       await this.syncTags(id, data.tagIds);
+    }
+    if (data.bulbi !== undefined) {
+      await this.syncBulbi(id, data.bulbi, id);
     }
 
     await this.createRevision(id, actor.sub, 'Updated');
@@ -302,34 +445,55 @@ export class PostsService {
 
   async transition(
     id: string,
-    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive',
+    action: 'submit' | 'approve' | 'reject' | 'publish' | 'archive' | 'republish',
     actor: Actor,
     message?: string,
   ) {
     const post = await this.prisma.post.findUnique({ where: { id } });
     if (!post) throw new NotFoundException();
 
-    const newStatus = this.computeTransition(post.status, action, actor);
+    const newStatus = this.computeTransition(post.status, action, actor, post.authorId);
 
     const updateData: Record<string, unknown> = { status: newStatus };
     if (action === 'submit') updateData['submittedById'] = actor.sub;
-    if (action === 'approve' || action === 'publish') {
+    if (action === 'approve' || action === 'publish' || action === 'republish') {
       updateData['approvedById'] = actor.sub;
-      updateData['publishedAt'] = new Date();
+      updateData['publishedAt'] = post.publishedAt ?? new Date();
     }
 
     const updated = await this.prisma.post.update({ where: { id }, data: updateData });
     await this.createRevision(id, actor.sub, message || `Transition: ${action}`);
 
+    if (action === 'submit') {
+      const actorUser = await this.prisma.user.findUnique({
+        where: { id: actor.sub },
+        select: { displayName: true },
+      });
+      this.notifications.notifyPostSubmitted({
+        postId: updated.id,
+        title: post.title,
+        actorId: actor.sub,
+        actorName: actorUser?.displayName ?? 'un autor',
+      });
+    }
+
     return { id: updated.id, status: updated.status };
   }
 
-  private computeTransition(current: PostStatus, action: string, actor: Actor): PostStatus {
+  private computeTransition(
+    current: PostStatus,
+    action: string,
+    actor: Actor,
+    authorId?: string | null,
+  ): PostStatus {
     const isEditor = actor.role === Role.EDITOR || actor.role === Role.ADMIN;
     switch (action) {
       case 'submit':
-        if (current !== PostStatus.DRAFT && current !== PostStatus.IN_REVIEW) {
-          throw new BadRequestException('Can only submit from DRAFT or IN_REVIEW');
+        if (!isEditor && authorId !== actor.sub) {
+          throw new ForbiddenException('You can only submit your own posts');
+        }
+        if (current !== PostStatus.DRAFT) {
+          throw new BadRequestException('Can only submit DRAFT posts');
         }
         return PostStatus.IN_REVIEW;
       case 'approve':
@@ -348,6 +512,12 @@ export class PostsService {
       case 'archive':
         if (!isEditor) throw new ForbiddenException('Only EDITOR/ADMIN can archive');
         return PostStatus.ARCHIVED;
+      case 'republish':
+        if (!isEditor) throw new ForbiddenException('Only EDITOR/ADMIN can republish');
+        if (current !== PostStatus.ARCHIVED) {
+          throw new BadRequestException('Can only republish ARCHIVED posts');
+        }
+        return PostStatus.PUBLISHED;
       default:
         throw new BadRequestException(`Unknown action: ${action}`);
     }
@@ -356,7 +526,12 @@ export class PostsService {
   // ─── Delete ───────────────────────────────────────────────────────────────
 
   async delete(id: string, actor: Actor) {
-    if (actor.role !== Role.ADMIN) throw new ForbiddenException('Only ADMIN can delete posts');
+    const post = await this.prisma.post.findUnique({ where: { id } });
+    if (!post) throw new NotFoundException();
+    const isEditor = actor.role === Role.ADMIN || actor.role === Role.EDITOR;
+    if (!isEditor && post.authorId !== actor.sub) {
+      throw new ForbiddenException('You can only delete your own posts');
+    }
     await this.prisma.post.delete({ where: { id } });
     return { ok: true };
   }
@@ -392,10 +567,14 @@ export class PostsService {
    * Find a unique slug by appending -2, -3, ... until it doesn't collide.
    * Returns the input untouched if it's already free.
    */
-  private async findUniqueSlug(base: string): Promise<string> {
+  private async findUniqueSlug(base: string, excludePostId?: string): Promise<string> {
     let candidate = base;
     let suffix = 2;
-    while (await this.prisma.post.findUnique({ where: { slug: candidate } })) {
+    while (
+      await this.prisma.post.findFirst({
+        where: { slug: candidate, ...(excludePostId ? { id: { not: excludePostId } } : {}) },
+      })
+    ) {
       candidate = `${base}-${suffix}`;
       suffix += 1;
       if (suffix > 100) {
@@ -424,6 +603,74 @@ export class PostsService {
     for (const tagId of tagIds) {
       await this.prisma.postTag.create({ data: { postId, tagId } });
     }
+  }
+
+  private async syncBulbi(
+    postId: string,
+    bulbi: Array<{ postId: string; labelOverride?: string | null }>,
+    selfPostId: string | null,
+  ) {
+    const seen = new Set<string>();
+    const normalized: Array<{ postId: string; labelOverride: string | null }> = [];
+
+    for (const item of bulbi) {
+      const linkedPostId = item.postId?.trim();
+      if (!linkedPostId) continue;
+      if (selfPostId && linkedPostId === selfPostId) {
+        throw new BadRequestException('Bulbi cannot link an article to itself');
+      }
+      if (seen.has(linkedPostId)) continue;
+      seen.add(linkedPostId);
+      normalized.push({
+        postId: linkedPostId,
+        labelOverride: item.labelOverride?.trim() ? item.labelOverride.trim() : null,
+      });
+    }
+
+    if (normalized.length > 0) {
+      const linkedPosts = await this.prisma.post.findMany({
+        where: {
+          id: { in: normalized.map((item) => item.postId) },
+          status: PostStatus.PUBLISHED,
+        },
+        select: { id: true },
+      });
+      if (linkedPosts.length !== normalized.length) {
+        throw new BadRequestException('Bulbi can only link published articles');
+      }
+    }
+
+    await this.prisma.postBulb.deleteMany({ where: { postId } });
+    for (const [index, item] of normalized.entries()) {
+      await this.prisma.postBulb.create({
+        data: {
+          postId,
+          linkedPostId: item.postId,
+          sortOrder: index,
+          labelOverride: item.labelOverride,
+        },
+      });
+    }
+  }
+
+  private async resolvePillId(data: {
+    pillId?: string | null;
+    pillText?: string | null;
+    pillColor?: string | null;
+    pillTextColor?: string | null;
+  }): Promise<string | null> {
+    if (data.pillText?.trim() && data.pillColor) {
+      const pill = await this.pills.findOrCreate(
+        data.pillText,
+        data.pillColor,
+        data.pillTextColor ?? '#ffffff',
+      );
+      return pill.id;
+    }
+    if (data.pillId) return data.pillId;
+    if (data.pillId === null) return null;
+    if (data.pillText === null || data.pillColor === null) return null;
+    return null;
   }
 
   private async createRevision(postId: string, editorId: string, message: string) {

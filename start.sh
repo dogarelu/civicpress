@@ -102,13 +102,24 @@ compose() {
 
 ensure_docker
 
+# Probe Postgres availability on localhost:5432.
+# Falls back to a plain TCP socket check when pg_isready is unavailable.
+postgres_ready() {
+  if command -v pg_isready >/dev/null 2>&1; then
+    pg_isready -h localhost -p 5432 -q >/dev/null 2>&1
+    return $?
+  fi
+  # /dev/tcp is a bash builtin; this avoids requiring postgresql-client locally.
+  (echo > /dev/tcp/127.0.0.1/5432) >/dev/null 2>&1
+}
+
 # Check Postgres — bring it up via docker compose if not responding
-if ! pg_isready -h localhost -p 5432 -q 2>/dev/null; then
+if ! postgres_ready; then
   warn "PostgreSQL not responding on :5432"
   info "Starting Postgres via docker compose…"
   (cd "$ROOT" && compose up -d postgres) || die "Failed to start Postgres container"
   local_elapsed=0
-  while ! pg_isready -h localhost -p 5432 -q 2>/dev/null; do
+  while ! postgres_ready; do
     sleep 1; local_elapsed=$((local_elapsed+1))
     [[ $local_elapsed -ge 30 ]] && die "PostgreSQL did not become ready within 30s"
   done

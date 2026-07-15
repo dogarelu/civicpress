@@ -20,25 +20,32 @@ export class JwtAuthGuard implements CanActivate {
     if (isPublic) return true;
 
     const request = ctx.switchToHttp().getRequest<FastifyRequest>();
-    const token = this.extractToken(request);
-    if (!token) throw new UnauthorizedException();
+    const tokens = this.extractTokens(request);
+    if (!tokens.length) throw new UnauthorizedException();
 
-    try {
-      const payload = await this.jwt.verifyAsync(token);
-      (request as unknown as Record<string, unknown>)['user'] = payload;
-    } catch {
-      throw new UnauthorizedException();
+    for (const token of tokens) {
+      try {
+        const payload = await this.jwt.verifyAsync(token);
+        (request as unknown as Record<string, unknown>)['user'] = payload;
+        return true;
+      } catch {
+        // Try the next available token. This lets a valid refresh cookie keep the
+        // session alive when the short-lived access cookie has expired.
+      }
     }
-    return true;
+
+    throw new UnauthorizedException();
   }
 
-  private extractToken(request: FastifyRequest): string | undefined {
+  private extractTokens(request: FastifyRequest): string[] {
     const cookies = (request as unknown as Record<string, unknown>)['cookies'] as
       | Record<string, string>
       | undefined;
-    if (cookies?.['access_token']) return cookies['access_token'];
+    const tokens: string[] = [];
+    if (cookies?.['access_token']) tokens.push(cookies['access_token']);
     const auth = request.headers.authorization;
-    if (auth?.startsWith('Bearer ')) return auth.slice(7);
-    return undefined;
+    if (auth?.startsWith('Bearer ')) tokens.push(auth.slice(7));
+    if (cookies?.['refresh_token']) tokens.push(cookies['refresh_token']);
+    return tokens;
   }
 }

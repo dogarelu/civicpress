@@ -50,4 +50,9 @@ export class AuthStore {
   clear() {
     this._user.set(null);
   }
+
+  patchUser(partial: Partial<Me>) {
+    const current = this._user();
+    if (current) this._user.set({ ...current, ...partial });
+  }
 }

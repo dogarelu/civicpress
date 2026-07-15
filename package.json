@@ -14,6 +14,8 @@
     "db:migrate": "pnpm --filter @civicpress/backend prisma:migrate",
     "db:studio": "pnpm --filter @civicpress/backend prisma:studio",
     "seed": "pnpm --filter @civicpress/backend seed",
+    "seed:wp-sql": "pnpm --filter @civicpress/backend seed:wp-sql",
+    "seed:wp-sql:dry": "DRY_RUN=1 pnpm --filter @civicpress/backend seed:wp-sql",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "verify:visual": "tsx scripts/verify-visual.ts",
@@ -35,11 +37,6 @@
     "prettier": "^3.2.5",
     "tsx": "^4.22.3",
     "typescript": "~5.5.4"
-  },
-  "pnpm": {
-    "overrides": {
-      "typescript": "5.5.4"
-    }
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,json,md,css,scss,html}": [

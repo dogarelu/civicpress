@@ -12,19 +12,14 @@ import type { CategoryStrip } from '@civicpress/shared';
       <section class="mb-8">
         <div class="flex items-center justify-between mb-3">
           <h2 class="font-heading text-lg font-extrabold uppercase tracking-wide relative">
-            <span
-              class="relative z-10 pr-3 bg-background"
-              [style.color]="strip.category.color ?? 'var(--color-primary)'"
-              >{{ strip.category.name }}</span
-            >
-            <span
-              class="absolute bottom-0 left-0 w-full h-[3px]"
-              [style.background-color]="strip.category.color ?? 'var(--color-primary)'"
-            ></span>
+            <span class="relative z-10 pr-3 bg-background text-gray-800">{{
+              strip.category.name
+            }}</span>
+            <span class="absolute bottom-0 left-0 w-full h-[3px] bg-gray-300"></span>
           </h2>
           <a
             [routerLink]="['/category', strip.category.slug]"
-            class="text-xs text-gray-500 hover:text-primary transition-colors uppercase tracking-wide"
+            class="text-xs text-gray-500 hover:text-gray-700 transition-colors uppercase tracking-wide"
             >Mai mult »</a
           >
         </div>
@@ -49,7 +44,10 @@ import type { CategoryStrip } from '@civicpress/shared';
                 }
               </a>
               <div class="p-3">
-                <h3 class="font-heading text-sm font-semibold leading-tight text-secondary">
+                <h3
+                  class="font-heading leading-tight text-secondary"
+                  style="font-size: var(--news-title-font-size, 20px); font-weight: var(--news-title-font-weight, 700); color: var(--news-title-color, currentColor);"
+                >
                   <a
                     [routerLink]="'/' + post.slug"
                     class="hover:text-primary transition-colors line-clamp-3"
