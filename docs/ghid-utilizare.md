@@ -215,11 +215,12 @@ Butoanele afișate depind de status și de rol:
 Un articol trece prin următoarele stări:
 
 ```
-Ciornă ──trimite──► În revizie ──aprobă──► Publicat ──arhivează──► Arhivat
-  │                     │                                              │
-  │                     └──respinge──► Ciornă                          └──republică──► Publicat
-  │
-  └──publică direct (Editor+)──► Publicat
+Ciornă      ──trimite──────────►  În revizie
+În revizie  ──aprobă───────────►  Publicat
+În revizie  ──respinge─────────►  Ciornă
+Ciornă      ──publică direct───►  Publicat   (Editor+)
+Publicat    ──arhivează────────►  Arhivat
+Arhivat     ──republică────────►  Publicat
 ```
 
 Acțiunile și cine le poate face:

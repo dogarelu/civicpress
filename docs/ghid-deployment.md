@@ -42,17 +42,17 @@ Aplicația este un monorepo cu trei aplicații și un pachet partajat:
 În producție, un **nginx** face terminarea TLS și rutează traficul către cele trei procese pornite cu **PM2**. Baza de date este PostgreSQL. Un watchdog systemd întreține un record DNS dinamic (util pentru găzduire pe conexiune rezidențială).
 
 ```
-                         ┌──────────────────────────────┐
-   Internet  ── 443 ───► │            nginx             │
-                         │  TLS + reverse proxy         │
-                         └───┬───────┬──────────┬───────┘
-                             │       │          │
-                    /        │  /admin/    /v1/ │
-                             ▼       ▼          ▼
-                     public(4200) admin(4300) backend(3000)
-                                                  │
-                                                  ▼
-                                            PostgreSQL(5432)
+Internet
+   │  HTTPS (443)
+   ▼
+nginx  (TLS + reverse proxy)
+   │
+   ├─ /        ──►  public   (4200)
+   ├─ /admin/  ──►  admin    (4300)
+   └─ /v1/     ──►  backend  (3000)
+                       │
+                       ▼
+                  PostgreSQL (5432)
 ```
 
 ---
@@ -300,13 +300,31 @@ pnpm --filter @civicpress/public build
 pnpm --filter @civicpress/admin build -- --base /admin/
 ```
 
-Procesele PM2 pornite:
+Procesele PM2 pornite (3):
 
-| Nume PM2        | Comandă                                                                                | CWD            | Port | Variabile setate                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------- | -------------- | ---- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `civic-backend` | `node dist/apps/backend/src/main.js`                                                   | `apps/backend` | 3000 | `PUBLIC_URL=https://civicpress.ro`, `ADMIN_URL=https://civicpress.ro/admin`, `MEDIA_BASE_URL=https://civicpress.ro`, `PORT=3000` |
-| `civic-public`  | `node apps/public/dist/analog/server/index.mjs`                                        | rădăcină       | 4200 | `PORT=4200`, `HOST=127.0.0.1`, `NITRO_PORT=4200`, `NITRO_HOST=127.0.0.1`, `NITRO_APP_BASE_URL="/"`                               |
-| `civic-admin`   | `pnpm --filter @civicpress/admin preview -- --host 127.0.0.1 --port 4300 --strictPort` | rădăcină       | 4300 | —                                                                                                                                |
+**`civic-backend`** — API backend
+
+- Port: `3000`
+- CWD: `apps/backend`
+- Comandă: `node dist/apps/backend/src/main.js`
+- Variabile: `PORT=3000`, `PUBLIC_URL`, `ADMIN_URL`, `MEDIA_BASE_URL` (setate către domeniul de producție)
+
+**`civic-public`** — site public (SSR)
+
+- Port: `4200`
+- CWD: rădăcina proiectului
+- Comandă: `node apps/public/dist/analog/server/index.mjs`
+- Variabile: `PORT=4200`, `HOST=127.0.0.1`, `NITRO_PORT=4200`, `NITRO_HOST=127.0.0.1`, `NITRO_APP_BASE_URL="/"`
+
+**`civic-admin`** — panou admin
+
+- Port: `4300`
+- CWD: rădăcina proiectului
+- Comandă:
+  ```bash
+  pnpm --filter @civicpress/admin preview -- \
+    --host 127.0.0.1 --port 4300 --strictPort
+  ```
 
 După pornire, scriptul rulează `pm2 save`.
 
@@ -548,21 +566,69 @@ Enums:
 
 Modele principale:
 
-| Model            | Câmpuri cheie                                                                                                                                                                                                | Relații                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| **SiteSettings** | singleton `id=default`; branding, tipografie, meniu antet, HTML pagini legale, URL-uri sociale                                                                                                               | → `logoMedia`, `faviconMedia`                                                         |
-| **PageLayout**   | `id` = `home`/`category`/`article`; `config` JSON                                                                                                                                                            | —                                                                                     |
-| **Media**        | `filename`, `mimeType`, `width/height`, `sizeBytes`, `path`, `variants` JSON, `alt`, `caption`                                                                                                               | ← `owner` (User); → posturi, logo, avataruri                                          |
-| **User**         | `email`, `passwordHash`, `displayName`, `slug`, `bio`, `role`, `isActive`, `lastLoginAt`, preferințe notificări, `pseudonyms[]`                                                                              | → avatar; → posturi (author/submitter/approver), media, revizii, audit                |
-| **Category**     | `name`, `slug`, `color`, `description`, `parentId`, `showInMenu`, `menuOrder`, `externalId`                                                                                                                  | auto-referențială părinte/copii; → posturi (PostCategory)                             |
-| **Pill**         | `text`, `color`, `textColor`                                                                                                                                                                                 | → posturi                                                                             |
-| **Tag**          | `name`, `slug`, `externalId`                                                                                                                                                                                 | → posturi (PostTag)                                                                   |
-| **Post**         | `title`, `slug`, `excerpt`, `contentHtml`, `heroMediaId`, `pillId`, `videoUrl`, `authorId`, `authorName`, bife de vizibilitate, `viewCount`, `status`, `scheduledFor`, câmpuri SEO, `externalId`, timestamps | → heroMedia, pill, author/submittedBy/approvedBy; ↔ categorii, taguri, bulbi, revizii |
-| **PostCategory** | PK compus `(postId, categoryId)`, `isPrimary`                                                                                                                                                                | Post ↔ Category                                                                       |
-| **PostTag**      | PK compus `(postId, tagId)`                                                                                                                                                                                  | Post ↔ Tag                                                                            |
-| **PostBulb**     | PK compus `(postId, linkedPostId)`, `sortOrder`, `labelOverride`                                                                                                                                             | Post → Post legat                                                                     |
-| **Revision**     | snapshot `title`, `excerpt`, `contentHtml`, `editorId`, `message`                                                                                                                                            | → post, editor                                                                        |
-| **AuditLog**     | `action`, `entity`, `entityId`, `diff` JSON, `ip`, `userAgent`                                                                                                                                               | → actor (User)                                                                        |
+**SiteSettings** — singleton (`id=default`)
+
+- Câmpuri: branding, tipografie, meniu antet, HTML pagini legale, URL-uri sociale
+- Relații: → `logoMedia`, `faviconMedia`
+
+**PageLayout**
+
+- Câmpuri: `id` = `home`/`category`/`article`; `config` JSON
+
+**Media**
+
+- Câmpuri: `filename`, `mimeType`, `width/height`, `sizeBytes`, `path`, `variants` JSON, `alt`, `caption`
+- Relații: ← `owner` (User); → posturi, logo, avataruri
+
+**User**
+
+- Câmpuri: `email`, `passwordHash`, `displayName`, `slug`, `bio`, `role`, `isActive`, `lastLoginAt`, preferințe notificări, `pseudonyms[]`
+- Relații: → avatar; → posturi (author/submitter/approver), media, revizii, audit
+
+**Category**
+
+- Câmpuri: `name`, `slug`, `color`, `description`, `parentId`, `showInMenu`, `menuOrder`, `externalId`
+- Relații: auto-referențială părinte/copii; → posturi (PostCategory)
+
+**Pill**
+
+- Câmpuri: `text`, `color`, `textColor`
+- Relații: → posturi
+
+**Tag**
+
+- Câmpuri: `name`, `slug`, `externalId`
+- Relații: → posturi (PostTag)
+
+**Post**
+
+- Câmpuri: `title`, `slug`, `excerpt`, `contentHtml`, `heroMediaId`, `pillId`, `videoUrl`, `authorId`, `authorName`, bife de vizibilitate, `viewCount`, `status`, `scheduledFor`, câmpuri SEO, `externalId`, timestamps
+- Relații: → heroMedia, pill, author/submittedBy/approvedBy; ↔ categorii, taguri, bulbi, revizii
+
+**PostCategory**
+
+- Câmpuri: PK compus `(postId, categoryId)`, `isPrimary`
+- Relații: Post ↔ Category
+
+**PostTag**
+
+- Câmpuri: PK compus `(postId, tagId)`
+- Relații: Post ↔ Tag
+
+**PostBulb**
+
+- Câmpuri: PK compus `(postId, linkedPostId)`, `sortOrder`, `labelOverride`
+- Relații: Post → Post legat
+
+**Revision**
+
+- Câmpuri: snapshot `title`, `excerpt`, `contentHtml`, `editorId`, `message`
+- Relații: → post, editor
+
+**AuditLog**
+
+- Câmpuri: `action`, `entity`, `entityId`, `diff` JSON, `ip`, `userAgent`
+- Relații: → actor (User)
 
 ---
 
