@@ -12,6 +12,8 @@ interface EditState {
   description: string;
   parentId: string;
   showInMenu: boolean;
+  showInMobileMenu: boolean;
+  showInMobileRow: boolean;
 }
 
 @Component({
@@ -97,10 +99,18 @@ interface EditState {
                   }
                 </select>
               </div>
-              <div class="flex items-center gap-3 sm:pt-6">
+              <div class="flex flex-col gap-2 sm:pt-5">
                 <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
                   <input type="checkbox" [(ngModel)]="newForm.showInMenu" class="rounded" />
-                  Afișează în meniu
+                  Implicit meniu web (dacă banda-meniu nu are listă proprie)
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" [(ngModel)]="newForm.showInMobileMenu" class="rounded" />
+                  Afișează în meniul burger
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                  <input type="checkbox" [(ngModel)]="newForm.showInMobileRow" class="rounded" />
+                  Afișează în rândul de categorii
                 </label>
               </div>
               <div class="sm:col-span-2">
@@ -189,10 +199,26 @@ interface EditState {
                         </p>
                       }
                     </div>
-                    <div class="flex items-center gap-3 sm:pt-6">
+                    <div class="flex flex-col gap-2 sm:pt-5">
                       <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
                         <input type="checkbox" [(ngModel)]="editForm.showInMenu" class="rounded" />
-                        Afișează în meniu
+                        Implicit meniu web (dacă banda-meniu nu are listă proprie)
+                      </label>
+                      <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          [(ngModel)]="editForm.showInMobileMenu"
+                          class="rounded"
+                        />
+                        Afișează în meniul burger
+                      </label>
+                      <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          [(ngModel)]="editForm.showInMobileRow"
+                          class="rounded"
+                        />
+                        Afișează în rândul de categorii
                       </label>
                     </div>
                     <div class="sm:col-span-2">
@@ -266,14 +292,30 @@ interface EditState {
                     {{ cat.postCount }} art.
                   </span>
 
-                  <!-- Menu badge -->
+                  <!-- Menu badges -->
                   <span
                     class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full"
                     [class.bg-green-100]="cat.showInMenu"
                     [class.text-green-700]="cat.showInMenu"
                     [class.bg-gray-100]="!cat.showInMenu"
                     [class.text-gray-400]="!cat.showInMenu"
-                    >{{ cat.showInMenu ? 'Meniu' : 'Ascuns' }}</span
+                    >{{ cat.showInMenu ? 'Web' : 'Web ascuns' }}</span
+                  >
+                  <span
+                    class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full"
+                    [class.bg-green-100]="cat.showInMobileMenu"
+                    [class.text-green-700]="cat.showInMobileMenu"
+                    [class.bg-gray-100]="!cat.showInMobileMenu"
+                    [class.text-gray-400]="!cat.showInMobileMenu"
+                    >{{ cat.showInMobileMenu ? 'Burger' : 'Burger ascuns' }}</span
+                  >
+                  <span
+                    class="flex-shrink-0 text-xs px-2 py-0.5 rounded-full"
+                    [class.bg-green-100]="cat.showInMobileRow"
+                    [class.text-green-700]="cat.showInMobileRow"
+                    [class.bg-gray-100]="!cat.showInMobileRow"
+                    [class.text-gray-400]="!cat.showInMobileRow"
+                    >{{ cat.showInMobileRow ? 'Rând' : 'Rând ascuns' }}</span
                   >
                   @if (cat.parentId && parentName(cat.parentId); as pName) {
                     <span
@@ -419,7 +461,15 @@ export class CategoriesListComponent implements OnInit {
   }
 
   private blankForm(): EditState {
-    return { name: '', slug: '', description: '', parentId: '', showInMenu: true };
+    return {
+      name: '',
+      slug: '',
+      description: '',
+      parentId: '',
+      showInMenu: true,
+      showInMobileMenu: true,
+      showInMobileRow: true,
+    };
   }
 
   private sortForHierarchy(cats: AdminCategory[]): AdminCategory[] {
@@ -482,6 +532,8 @@ export class CategoriesListComponent implements OnInit {
         description: this.newForm.description.trim() || null,
         parentId: this.newForm.parentId || null,
         showInMenu: this.newForm.showInMenu,
+        showInMobileMenu: this.newForm.showInMobileMenu,
+        showInMobileRow: this.newForm.showInMobileRow,
       })
       .subscribe({
         next: () => {
@@ -506,6 +558,8 @@ export class CategoriesListComponent implements OnInit {
       description: cat.description ?? '',
       parentId: cat.parentId ?? '',
       showInMenu: cat.showInMenu,
+      showInMobileMenu: cat.showInMobileMenu,
+      showInMobileRow: cat.showInMobileRow,
     };
     this.editingId.set(cat.id);
     this.addingNew.set(false);
@@ -532,6 +586,8 @@ export class CategoriesListComponent implements OnInit {
         description: this.editForm.description.trim() || null,
         parentId: this.editForm.parentId || null,
         showInMenu: this.editForm.showInMenu,
+        showInMobileMenu: this.editForm.showInMobileMenu,
+        showInMobileRow: this.editForm.showInMobileRow,
       })
       .subscribe({
         next: (updated) => {

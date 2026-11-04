@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { catchError, firstValueFrom, of } from 'rxjs';
-import type { Me } from '@civicpress/shared';
+import { canEditPublishedPosts, type Me } from '@civicpress/shared';
 
 @Injectable({ providedIn: 'root' })
 export class AdminSessionService {
@@ -10,6 +10,7 @@ export class AdminSessionService {
   private _checked = signal(false);
 
   isAdmin = computed(() => this._me()?.role === 'ADMIN');
+  canEditPosts = computed(() => canEditPublishedPosts(this._me()?.role));
 
   async hydrate(): Promise<void> {
     if (this._checked()) return;

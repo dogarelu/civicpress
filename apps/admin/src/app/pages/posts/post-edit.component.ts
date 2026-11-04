@@ -7,20 +7,42 @@ import { AuthStore } from '../../services/auth.store';
 import { ToastService } from '../../services/toast.service';
 import { RichTextEditorComponent } from '../../components/rich-text-editor.component';
 import { PostPickerComponent, type PickedPost } from '../../components/post-picker.component';
+import { ArticlePreviewModalComponent } from '../../components/article-preview-modal.component';
+import { resolvePreviewArticleUrl } from '../../utils/public-site-url';
+import { videoFileRejection, videoUploadErrorMessage } from '../../utils/media-upload';
 import type {
   Pill,
+  PillCorner,
+  PillSize,
+  PostPillPlacement,
   AdminLayouts,
   ModuleType,
   ModulePlacementPage,
   PostTransition,
+  PostPreviewRequest,
 } from '@civicpress/shared';
-import { isYoutubeUrl, toYoutubeEmbedUrl } from '@civicpress/shared';
+import {
+  canManageSiteStructure,
+  isYoutubeUrl,
+  listArticleBodyMedia,
+  toYoutubeEmbedUrl,
+} from '@civicpress/shared';
 
 interface Category {
   id: string;
   name: string;
   slug: string;
   parentId: string | null;
+}
+
+interface EditablePostPill {
+  /** Local row key for ngModel names / track. */
+  key: string;
+  pillId: string;
+  /** Empty = use global default (only allowed when a single pill is set). */
+  corner: '' | PillCorner;
+  /** Relative to the layout/global default size. */
+  size: PillSize;
 }
 
 interface CategoryOption {
@@ -37,24 +59,35 @@ interface ModulePlacementOption {
 }
 
 interface EditableBulb {
+  label: string;
   postId: string;
   title: string;
-  labelOverride: string;
   pickedPost: PickedPost | null;
+}
+
+interface EditablePhotoCaption {
+  label: string;
 }
 
 const MODULE_TYPE_LABELS: Record<ModuleType, string> = {
   hero: '1 articol principal',
-  'hero-list': '1 principal + 3 mici',
-  'hero-list-6': '1 principal + 6 mici',
-  'hero-top-list': '1 principal sus + 3 dedesubt',
+  'hero-list': '1 principal + mici în dreapta',
+  'hero-list-6': '1 principal + mici în dreapta (complet)',
+  'hero-list-center': '1 principal pe mijloc + mici stânga/dreapta',
+  'hero-top-list': '1 principal sus + mici dedesubt',
   'hero-slideshow': 'Principal pe poză (slideshow)',
   grid: '4 articole în grilă (2×2)',
   list: 'Listă de articole',
   'rows-3': 'Rânduri de 3',
   'rows-4': 'Rânduri de 4',
   'rows-4-sm': 'Rânduri de 4 mici',
+  'rows-5': 'Rânduri de 5',
+  'pictures-7': 'Imagini cu titlu pe poză',
+  'category-columns': 'Coloane categorii',
   slideshow: 'Slideshow articole',
+  'video-list': '1 video + listă scroll (manual)',
+  'article-list': '1 articol + listă scroll',
+  split: 'Split (1 articol)',
 };
 
 function moduleTypeLabel(type: ModuleType): string {
@@ -73,7 +106,12 @@ function buildPlacementOptions(
   for (const mod of config.modules) {
     const modName = mod.options?.name?.trim() || moduleTypeLabel(mod.type);
 
-    if (mod.type === 'rows-3' || mod.type === 'rows-4' || mod.type === 'rows-4-sm') {
+    if (
+      mod.type === 'rows-3' ||
+      mod.type === 'rows-4' ||
+      mod.type === 'rows-4-sm' ||
+      mod.type === 'rows-5'
+    ) {
       for (const row of mod.options?.rows ?? []) {
         if (
           page === 'home' &&
@@ -93,6 +131,20 @@ function buildPlacementOptions(
           label: `${pageLabel} — ${modName} — ${rowTitle}`,
         });
       }
+    } else if (mod.type === 'category-columns') {
+      for (const col of mod.options?.columns ?? []) {
+        if (page === 'home' && col.categoryId && col.categoryId !== categoryId) {
+          continue;
+        }
+        const colTitle = col.name?.trim() || 'Coloană categorie';
+        options.push({
+          key: `${page}:${mod.id}:${col.id}`,
+          page,
+          moduleId: mod.id,
+          rowId: col.id,
+          label: `${pageLabel} — ${modName} — ${colTitle}`,
+        });
+      }
     } else if (page === 'home' || page === 'category') {
       options.push({
         key: `${page}:${mod.id}`,
@@ -109,7 +161,13 @@ function buildPlacementOptions(
 @Component({
   selector: 'cp-post-edit',
   standalone: true,
-  imports: [FormsModule, RouterLink, RichTextEditorComponent, PostPickerComponent],
+  imports: [
+    FormsModule,
+    RouterLink,
+    RichTextEditorComponent,
+    PostPickerComponent,
+    ArticlePreviewModalComponent,
+  ],
   template: `
     <div class="p-6 max-w-5xl mx-auto">
       <div class="flex items-center gap-4 mb-6">
@@ -122,12 +180,33 @@ function buildPlacementOptions(
             status()
           }}</span>
         }
+        <button
+          type="button"
+          (click)="openPreview()"
+          [disabled]="previewing()"
+          class="ml-auto text-sm px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {{ previewing() ? 'Se încarcă…' : 'Previzualizare' }}
+        </button>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Main form -->
         <div class="lg:col-span-2 space-y-5">
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Supratitlu</label>
+              <input
+                type="text"
+                [(ngModel)]="kicker"
+                name="kicker"
+                placeholder="Text mic, italic, deasupra titlului"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm italic focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <p class="mt-1 text-xs text-gray-400">
+                Apare doar pe pagina articolului, deasupra titlului.
+              </p>
+            </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Titlu *</label>
               <input
@@ -232,26 +311,17 @@ function buildPlacementOptions(
                   name="showSummary"
                   class="rounded border-gray-300 text-red-700 focus:ring-red-500"
                 />
-                Afișează rezumat în module/listări
+                Afișează subtitlu în module/listări
               </label>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Rezumat</label>
-              <textarea
-                [(ngModel)]="excerpt"
-                name="excerpt"
-                rows="2"
-                placeholder="Scurt rezumat al articolului"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-              ></textarea>
             </div>
 
             <div class="border border-gray-100 rounded-lg p-4 space-y-3">
               <div class="flex items-center justify-between gap-3">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-700">Bulbi</h3>
+                  <h3 class="text-sm font-semibold text-gray-700">Subtitlu (bumbi)</h3>
                   <p class="text-xs text-gray-400 mt-0.5">
-                    Link-uri către alte articole, afișate sub imagine și deasupra conținutului.
+                    Înlocuiește rezumatul: listă de puncte sub titlu și în module. Linkul către un
+                    alt articol este opțional.
                   </p>
                 </div>
                 <button
@@ -259,18 +329,18 @@ function buildPlacementOptions(
                   (click)="addBulb()"
                   class="text-xs px-3 py-1.5 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
                 >
-                  + Adaugă bulbi
+                  + Adaugă bumb
                 </button>
               </div>
 
               @if (bulbi.length === 0) {
-                <p class="text-xs text-gray-400">Niciun bulbi adăugat.</p>
+                <p class="text-xs text-gray-400">Niciun bumb adăugat.</p>
               }
 
               @for (bulb of bulbi; track $index; let i = $index) {
                 <div class="border border-gray-200 rounded-lg p-3 space-y-3">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-gray-500">Bulbi {{ i + 1 }}</span>
+                    <span class="text-xs font-medium text-gray-500">Bumb {{ i + 1 }}</span>
                     <div class="flex items-center gap-1">
                       <button
                         type="button"
@@ -294,34 +364,99 @@ function buildPlacementOptions(
                         type="button"
                         (click)="removeBulb(i)"
                         class="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50"
-                        aria-label="Elimină bulbi"
+                        aria-label="Elimină bumb"
                       >
                         Șterge
                       </button>
                     </div>
                   </div>
 
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Text *</label>
+                    <input
+                      type="text"
+                      [(ngModel)]="bulb.label"
+                      [name]="'bulbLabel' + i"
+                      placeholder="Textul bumbului"
+                      class="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+
                   <cp-post-picker
-                    label="Articol legat"
+                    label="Link către articol (opțional)"
                     [value]="bulb.pickedPost"
                     (selected)="onBulbSelected(i, $event)"
                   />
+                </div>
+              }
+            </div>
 
-                  <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">
-                      Text afișat (opțional)
-                    </label>
-                    <input
-                      type="text"
-                      [(ngModel)]="bulb.labelOverride"
-                      [name]="'bulbLabel' + i"
-                      [placeholder]="bulb.title || 'Titlul articolului selectat'"
-                      class="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                    <p class="mt-1 text-xs text-gray-400">
-                      Dacă lași gol, se afișează titlul articolului legat.
-                    </p>
+            <div class="border border-gray-100 rounded-lg p-4 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="text-sm font-semibold text-gray-700">Explicații foto și video</h3>
+                  <p class="text-xs text-gray-400 mt-0.5">
+                    Câte o explicație pentru fiecare poză sau video, afișată sub ele. Prima e mereu
+                    pentru poza principală, apoi pozele și videourile din text, de sus în jos. Lasă
+                    un rând gol ca să sari un element.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  (click)="addPhotoCaption()"
+                  class="text-xs px-3 py-1.5 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  + Adaugă explicație
+                </button>
+              </div>
+
+              @if (photoCaptions.length === 0) {
+                <p class="text-xs text-gray-400">Nicio explicație adăugată.</p>
+              }
+
+              @for (caption of photoCaptions; track $index; let i = $index) {
+                <div class="border border-gray-200 rounded-lg p-3 space-y-2">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-gray-500">{{
+                      photoCaptionSlotLabel(i)
+                    }}</span>
+                    <div class="flex items-center gap-1">
+                      <button
+                        type="button"
+                        (click)="movePhotoCaption(i, -1)"
+                        [disabled]="i === 0"
+                        class="px-2 py-1 text-xs border border-gray-200 rounded disabled:opacity-40"
+                        aria-label="Mută sus"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        (click)="movePhotoCaption(i, 1)"
+                        [disabled]="i === photoCaptions.length - 1"
+                        class="px-2 py-1 text-xs border border-gray-200 rounded disabled:opacity-40"
+                        aria-label="Mută jos"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        (click)="removePhotoCaption(i)"
+                        class="px-2 py-1 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50"
+                        aria-label="Elimină explicație"
+                      >
+                        Șterge
+                      </button>
+                    </div>
                   </div>
+                  <input
+                    type="text"
+                    [(ngModel)]="caption.label"
+                    [name]="'photoCaption' + i"
+                    placeholder="Explicație"
+                    maxlength="1000"
+                    class="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
                 </div>
               }
             </div>
@@ -413,6 +548,14 @@ function buildPlacementOptions(
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <h2 class="text-sm font-semibold text-gray-700 mb-4">Publicare</h2>
             <div class="space-y-2">
+              <button
+                type="button"
+                (click)="openPreview()"
+                [disabled]="previewing()"
+                class="w-full py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {{ previewing() ? 'Se încarcă…' : 'Previzualizare' }}
+              </button>
               <button
                 (click)="save()"
                 [disabled]="saving()"
@@ -604,6 +747,45 @@ function buildPlacementOptions(
             </select>
           </div>
 
+          <!-- Tags -->
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h2 class="text-sm font-semibold text-gray-700 mb-1">Tag-uri</h2>
+            <p class="text-xs text-gray-400 mb-3">
+              Scrie un tag și apasă Enter sau virgulă. Apar la finalul articolului pe site.
+            </p>
+            <div
+              class="flex flex-wrap items-center gap-1.5 min-h-[42px] px-2 py-1.5 border border-gray-300 rounded-lg focus-within:ring-1 focus-within:ring-gray-400"
+              (click)="tagInputEl.focus()"
+            >
+              @for (tag of tags; track tag; let i = $index) {
+                <span
+                  class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200"
+                >
+                  {{ tag }}
+                  <button
+                    type="button"
+                    (click)="removeTag(i); $event.stopPropagation()"
+                    class="text-gray-400 hover:text-gray-700 leading-none"
+                    aria-label="Șterge tag"
+                  >
+                    ×
+                  </button>
+                </span>
+              }
+              <input
+                #tagInputEl
+                type="text"
+                [(ngModel)]="tagInput"
+                name="tagInput"
+                (keydown)="onTagKeydown($event)"
+                (blur)="commitTagInput()"
+                placeholder="{{ tags.length ? '' : 'ex: alegeri, primărie…' }}"
+                class="flex-1 min-w-[8rem] border-0 outline-none text-sm py-1 px-1 bg-transparent"
+                maxlength="100"
+              />
+            </div>
+          </div>
+
           <!-- Module placement -->
           @if (primaryCategoryId) {
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -648,40 +830,118 @@ function buildPlacementOptions(
             </div>
           }
 
-          <!-- Image pill -->
+          <!-- Image pills -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h2 class="text-sm font-semibold text-gray-700 mb-3">Pill imagine</h2>
-            <select
-              [(ngModel)]="selectedPillId"
-              name="selectedPillId"
-              (ngModelChange)="onPillSelectChange()"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none mb-3"
-            >
-              <option value="">— Fără pill —</option>
-              @for (pill of pills(); track pill.id) {
-                <option [value]="pill.id">{{ pill.text }} ({{ pill.color }})</option>
+            <h2 class="text-sm font-semibold text-gray-700 mb-1">Pill-uri imagine</h2>
+            <p class="text-xs text-gray-400 mb-3">
+              Maxim 4, colțuri diferite. Cu un singur pill, colțul poate rămâne implicit (setare
+              globală). Mărimea (mai mic / implicit / mai mare) e relativă la dimensiunea implicită.
+            </p>
+            <div class="space-y-3">
+              @for (row of postPills; track row.key; let i = $index) {
+                <div class="rounded-lg border border-gray-100 p-3 space-y-2">
+                  <div class="flex items-start gap-2">
+                    <select
+                      [(ngModel)]="row.pillId"
+                      [name]="'postPillId_' + row.key"
+                      class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none"
+                    >
+                      <option value="">— Alege pill —</option>
+                      @for (pill of pills(); track pill.id) {
+                        <option [value]="pill.id" [disabled]="isPillTaken(pill.id, row.key)">
+                          {{ pill.text }} ({{ pill.color }})
+                        </option>
+                      }
+                    </select>
+                    <button
+                      type="button"
+                      (click)="removePillRow(i)"
+                      class="shrink-0 px-2 py-2 text-xs text-gray-500 hover:text-red-700"
+                      title="Elimină"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  @if (row.pillId) {
+                    @for (pill of pills(); track pill.id) {
+                      @if (pill.id === row.pillId) {
+                        <span
+                          class="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold"
+                          [style.backgroundColor]="pill.color"
+                          [style.color]="pill.textColor"
+                        >
+                          {{ pill.text }}
+                        </span>
+                      }
+                    }
+                  }
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="block">
+                      <span class="block text-xs font-medium text-gray-600 mb-1">
+                        Colț{{ requiresExplicitCorners() ? ' *' : '' }}
+                      </span>
+                      <select
+                        [(ngModel)]="row.corner"
+                        [name]="'postPillCorner_' + row.key"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none"
+                      >
+                        @if (!requiresExplicitCorners()) {
+                          <option value="">Implicit (setare globală)</option>
+                        }
+                        <option value="top-left" [disabled]="isCornerTaken('top-left', row.key)">
+                          Stânga sus
+                        </option>
+                        <option value="top-right" [disabled]="isCornerTaken('top-right', row.key)">
+                          Dreapta sus
+                        </option>
+                        <option
+                          value="bottom-left"
+                          [disabled]="isCornerTaken('bottom-left', row.key)"
+                        >
+                          Stânga jos
+                        </option>
+                        <option
+                          value="bottom-right"
+                          [disabled]="isCornerTaken('bottom-right', row.key)"
+                        >
+                          Dreapta jos
+                        </option>
+                      </select>
+                    </label>
+                    <label class="block">
+                      <span class="block text-xs font-medium text-gray-600 mb-1">Mărime</span>
+                      <select
+                        [(ngModel)]="row.size"
+                        [name]="'postPillSize_' + row.key"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none"
+                      >
+                        <option value="smaller">Mai mic</option>
+                        <option value="default">Implicit</option>
+                        <option value="bigger">Mai mare</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
               }
-            </select>
-            @if (selectedPillId) {
-              @for (pill of pills(); track pill.id) {
-                @if (pill.id === selectedPillId) {
-                  <span
-                    class="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold mb-3"
-                    [style.backgroundColor]="pill.color"
-                    [style.color]="pill.textColor"
-                  >
-                    {{ pill.text }}
-                  </span>
-                }
-              }
-            }
-            <button
-              type="button"
-              (click)="showNewPill.set(!showNewPill())"
-              class="text-xs text-red-700 hover:text-red-800 font-medium"
-            >
-              {{ showNewPill() ? 'Anulează pill nou' : '+ Pill nou' }}
-            </button>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 mt-3">
+              <button
+                type="button"
+                (click)="addPillRow()"
+                [disabled]="!canAddPillRow()"
+                class="text-xs font-medium text-red-700 hover:text-red-800 disabled:text-gray-300 disabled:cursor-not-allowed"
+              >
+                + Adaugă pill
+              </button>
+              <button
+                type="button"
+                (click)="showNewPill.set(!showNewPill())"
+                [disabled]="!canAddPillRow() && !showNewPill()"
+                class="text-xs font-medium text-red-700 hover:text-red-800 disabled:text-gray-300 disabled:cursor-not-allowed"
+              >
+                {{ showNewPill() ? 'Anulează pill nou' : '+ Pill nou' }}
+              </button>
+            </div>
             @if (showNewPill()) {
               <div class="mt-3 pt-3 border-t border-gray-100 space-y-3">
                 <div>
@@ -729,6 +989,46 @@ function buildPlacementOptions(
                     />
                   </div>
                 </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="block">
+                    <span class="block text-xs font-medium text-gray-600 mb-1">
+                      Colț{{ requiresExplicitCornersForNew() ? ' *' : '' }}
+                    </span>
+                    <select
+                      [(ngModel)]="newPillCorner"
+                      name="newPillCorner"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none"
+                    >
+                      @if (!requiresExplicitCornersForNew()) {
+                        <option value="">Implicit (setare globală)</option>
+                      }
+                      <option value="top-left" [disabled]="isCornerTaken('top-left')">
+                        Stânga sus
+                      </option>
+                      <option value="top-right" [disabled]="isCornerTaken('top-right')">
+                        Dreapta sus
+                      </option>
+                      <option value="bottom-left" [disabled]="isCornerTaken('bottom-left')">
+                        Stânga jos
+                      </option>
+                      <option value="bottom-right" [disabled]="isCornerTaken('bottom-right')">
+                        Dreapta jos
+                      </option>
+                    </select>
+                  </label>
+                  <label class="block">
+                    <span class="block text-xs font-medium text-gray-600 mb-1">Mărime</span>
+                    <select
+                      [(ngModel)]="newPillSize"
+                      name="newPillSize"
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none"
+                    >
+                      <option value="smaller">Mai mic</option>
+                      <option value="default">Implicit</option>
+                      <option value="bigger">Mai mare</option>
+                    </select>
+                  </label>
+                </div>
                 @if (newPillText.trim()) {
                   <span
                     class="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold"
@@ -762,6 +1062,15 @@ function buildPlacementOptions(
         </div>
       </div>
     </div>
+
+    @if (previewOpen()) {
+      <cp-article-preview-modal
+        [loading]="previewing()"
+        [iframeSrc]="previewIframeSrc()"
+        (close)="closePreview()"
+        (refresh)="openPreview()"
+      />
+    }
   `,
 })
 export class PostEditComponent implements OnInit {
@@ -790,6 +1099,7 @@ export class PostEditComponent implements OnInit {
   authorId = signal<string | null>(null);
 
   title = '';
+  kicker = '';
   slug = '';
   postDate = '';
   postTime = '';
@@ -805,17 +1115,26 @@ export class PostEditComponent implements OnInit {
   heroMediaId = signal<string | null>(null);
   heroUrl = signal<string | null>(null);
   primaryCategoryId = '';
+  tags: string[] = [];
+  tagInput = '';
   placementPage: ModulePlacementPage | '' = '';
   selectedPlacementKey = '';
-  selectedPillId = '';
+  postPills: EditablePostPill[] = [];
+  private pillRowSeq = 0;
   showNewPill = signal(false);
   newPillText = '';
   newPillColor = '#8A0808';
   newPillTextColor = '#ffffff';
+  newPillCorner: '' | PillCorner = '';
+  newPillSize: PillSize = 'default';
   videoSource: 'none' | 'youtube' | 'upload' = 'none';
   videoUrl = '';
   bulbi: EditableBulb[] = [];
+  photoCaptions: EditablePhotoCaption[] = [];
   private publishedAtIso: string | null = null;
+  previewOpen = signal(false);
+  previewing = signal(false);
+  previewIframeSrc = signal<string | null>(null);
 
   get videoPreviewIsYoutube(): boolean {
     return !!this.videoUrl.trim() && isYoutubeUrl(this.videoUrl.trim());
@@ -879,7 +1198,7 @@ export class PostEditComponent implements OnInit {
       next: (me) => {
         this.pseudonyms.set(me.pseudonyms ?? []);
         this.syncSelectedPseudonym();
-        if (me.role === 'EDITOR' || me.role === 'ADMIN') {
+        if (canManageSiteStructure(me.role)) {
           this.api.getLayouts().subscribe({
             next: (layouts) => this.layouts.set(layouts),
             error: () => this.layouts.set(null),
@@ -897,6 +1216,7 @@ export class PostEditComponent implements OnInit {
     if (id) {
       this.api.getPost(id).subscribe((post) => {
         this.title = post['title'] as string;
+        this.kicker = (post['kicker'] as string) ?? '';
         this.slug = post['slug'] as string;
         this.excerpt = (post['excerpt'] as string) ?? '';
         this.contentHtml = (post['contentHtml'] as string) ?? '';
@@ -912,17 +1232,25 @@ export class PostEditComponent implements OnInit {
         this.syncSelectedPseudonym();
         this.showDate = (post['showDate'] as boolean | undefined) ?? true;
         this.showAuthor = (post['showAuthor'] as boolean | undefined) ?? true;
-        this.showSummary = (post['showSummary'] as boolean | undefined) ?? !!this.excerpt.trim();
+        this.bulbi = this.mapBulbiFromPost(post['bulbi']);
+        this.photoCaptions = this.mapPhotoCaptionsFromPost(post['photoCaptions']);
+        this.showSummary =
+          (post['showSummary'] as boolean | undefined) ??
+          (this.bulbi.length > 0 || !!this.excerpt.trim());
         this.status.set(post['status'] as string);
         this.authorId.set((post['author'] as { id?: string } | null)?.id ?? null);
         const cats = (post['categories'] as Array<{ id: string }>) ?? [];
         this.primaryCategoryId = cats[0]?.id ?? '';
-        const pill = post['pill'] as Pill | null | undefined;
-        this.selectedPillId = pill?.id ?? '';
+        const loadedTags = (post['tags'] as Array<{ name: string }> | undefined) ?? [];
+        this.tags = loadedTags.map((t) => t.name).filter(Boolean);
+        this.tagInput = '';
+        this.loadPostPills(post);
         this.showNewPill.set(false);
         this.newPillText = '';
         this.newPillColor = '#8A0808';
         this.newPillTextColor = '#ffffff';
+        this.newPillCorner = '';
+        this.newPillSize = 'default';
         const heroImg = post['heroImage'] as { url: string; id?: string } | null;
         if (heroImg) {
           this.heroMediaId.set(heroImg.id ?? null);
@@ -938,7 +1266,6 @@ export class PostEditComponent implements OnInit {
             ? 'youtube'
             : 'upload'
           : 'none';
-        this.bulbi = this.mapBulbiFromPost(post['bulbi']);
       });
 
       this.api.getRevisions(id).subscribe((revs) => this.revisions.set(revs));
@@ -952,11 +1279,55 @@ export class PostEditComponent implements OnInit {
       this.postDate = this.resolvePostDate(this.publishedAtIso);
       this.postTime = this.resolvePostTime(this.publishedAtIso);
       this.bulbi = [];
+      this.photoCaptions = [];
+      this.tags = [];
+      this.tagInput = '';
     }
   }
 
+  onTagKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      this.commitTagInput();
+      return;
+    }
+    if (event.key === 'Backspace' && !this.tagInput && this.tags.length > 0) {
+      this.removeTag(this.tags.length - 1);
+    }
+  }
+
+  commitTagInput() {
+    const parts = this.tagInput
+      .split(',')
+      .map((part) => part.trim().replace(/\s+/g, ' '))
+      .filter(Boolean);
+    for (const name of parts) {
+      this.addTag(name);
+    }
+    this.tagInput = '';
+  }
+
+  addTag(name: string) {
+    const normalized = name.trim().replace(/\s+/g, ' ');
+    if (!normalized || normalized.length > 100) return;
+    const exists = this.tags.some(
+      (t) => t.toLocaleLowerCase('ro') === normalized.toLocaleLowerCase('ro'),
+    );
+    if (exists) return;
+    this.tags = [...this.tags, normalized];
+  }
+
+  removeTag(index: number) {
+    this.tags = this.tags.filter((_, i) => i !== index);
+  }
+
+  private buildTagNamesPayload(): string[] {
+    this.commitTagInput();
+    return [...this.tags];
+  }
+
   addBulb() {
-    this.bulbi = [...this.bulbi, { postId: '', title: '', labelOverride: '', pickedPost: null }];
+    this.bulbi = [...this.bulbi, { label: '', postId: '', title: '', pickedPost: null }];
   }
 
   removeBulb(index: number) {
@@ -973,7 +1344,12 @@ export class PostEditComponent implements OnInit {
 
   onBulbSelected(index: number, picked: PickedPost | null) {
     if (!picked) {
-      this.bulbi[index] = { postId: '', title: '', labelOverride: '', pickedPost: null };
+      this.bulbi[index] = {
+        ...this.bulbi[index],
+        postId: '',
+        title: '',
+        pickedPost: null,
+      };
       this.bulbi = [...this.bulbi];
       return;
     }
@@ -984,14 +1360,15 @@ export class PostEditComponent implements OnInit {
       return;
     }
     if (this.bulbi.some((item, i) => i !== index && item.postId === picked.id)) {
-      this.toast.error('Acest articol este deja adăugat în Bulbi.');
+      this.toast.error('Acest articol este deja legat într-un bumb.');
       return;
     }
 
+    const currentLabel = this.bulbi[index]?.label?.trim() ?? '';
     this.bulbi[index] = {
+      label: currentLabel || picked.title,
       postId: picked.id,
       title: picked.title,
-      labelOverride: this.bulbi[index]?.labelOverride ?? '',
       pickedPost: picked,
     };
     this.bulbi = [...this.bulbi];
@@ -1002,8 +1379,14 @@ export class PostEditComponent implements OnInit {
     const items: EditableBulb[] = [];
     for (const item of raw) {
       const record = item as {
-        postId?: string;
+        label?: string | null;
         labelOverride?: string | null;
+        postId?: string;
+        linkedPost?: {
+          id?: string;
+          title?: string;
+          slug?: string;
+        } | null;
         post?: {
           id?: string;
           title?: string;
@@ -1012,19 +1395,24 @@ export class PostEditComponent implements OnInit {
           author?: { displayName?: string } | null;
         };
       };
-      const postId = record.postId ?? record.post?.id ?? '';
-      const title = record.post?.title ?? '';
-      if (!postId) continue;
+      const linked = record.linkedPost ?? record.post ?? null;
+      const postId = linked?.id ?? record.postId ?? '';
+      const title = linked?.title ?? '';
+      const label = record.label?.trim() || record.labelOverride?.trim() || title || '';
+      if (!label) continue;
       items.push({
+        label,
         postId,
         title,
-        labelOverride: record.labelOverride ?? '',
-        pickedPost: {
-          id: postId,
-          title,
-          publishedAt: record.post?.publishedAt ?? null,
-          authorDisplayName: record.post?.authorName ?? record.post?.author?.displayName ?? null,
-        },
+        pickedPost: postId
+          ? {
+              id: postId,
+              title,
+              publishedAt: record.post?.publishedAt ?? null,
+              authorDisplayName:
+                record.post?.authorName ?? record.post?.author?.displayName ?? null,
+            }
+          : null,
       });
     }
     return items;
@@ -1032,11 +1420,56 @@ export class PostEditComponent implements OnInit {
 
   private buildBulbiPayload() {
     return this.bulbi
-      .filter((item) => item.postId)
+      .filter((item) => item.label.trim())
       .map((item) => ({
-        postId: item.postId,
-        labelOverride: item.labelOverride.trim() || null,
+        label: item.label.trim(),
+        postId: item.postId || null,
       }));
+  }
+
+  addPhotoCaption() {
+    this.photoCaptions = [...this.photoCaptions, { label: '' }];
+  }
+
+  removePhotoCaption(index: number) {
+    this.photoCaptions = this.photoCaptions.filter((_, i) => i !== index);
+  }
+
+  movePhotoCaption(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= this.photoCaptions.length) return;
+    const next = [...this.photoCaptions];
+    [next[index], next[target]] = [next[target], next[index]];
+    this.photoCaptions = next;
+  }
+
+  photoCaptionSlotLabel(index: number): string {
+    if (index === 0) return 'Poză principală';
+    const media = listArticleBodyMedia(this.contentHtml);
+    const kind = media[index - 1];
+    const before = media.slice(0, index);
+    if (kind === 'video') {
+      return `Video din text ${before.filter((item) => item === 'video').length}`;
+    }
+    if (kind === 'image') {
+      return `Poză din text ${before.filter((item) => item === 'image').length}`;
+    }
+    return `Poză din text ${index}`;
+  }
+
+  private mapPhotoCaptionsFromPost(raw: unknown): EditablePhotoCaption[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.map((item) => ({
+      label: typeof item === 'string' ? item : ((item as { label?: string })?.label ?? ''),
+    }));
+  }
+
+  private buildPhotoCaptionsPayload() {
+    const items = this.photoCaptions.map((item) => ({ label: item.label }));
+    while (items.length > 0 && !items[items.length - 1].label.trim()) {
+      items.pop();
+    }
+    return items;
   }
 
   onPseudonymSelect(value: string) {
@@ -1105,17 +1538,98 @@ export class PostEditComponent implements OnInit {
     });
   }
 
-  onPillSelectChange() {
-    if (this.selectedPillId) {
-      this.showNewPill.set(false);
-      this.newPillText = '';
+  private nextPillKey(): string {
+    this.pillRowSeq += 1;
+    return `pill_${this.pillRowSeq}`;
+  }
+
+  private loadPostPills(post: Record<string, unknown>) {
+    const placements = (post['pills'] as PostPillPlacement[] | undefined) ?? [];
+    if (placements.length > 0) {
+      this.postPills = placements.map((p) => ({
+        key: this.nextPillKey(),
+        pillId: p.pill.id,
+        corner: (p.corner ?? '') as '' | PillCorner,
+        size: p.size ?? 'default',
+      }));
+      return;
     }
+    // Legacy single-pill response fallback
+    const pill = post['pill'] as Pill | null | undefined;
+    if (pill?.id) {
+      const corner = post['pillCorner'] as PillCorner | null | undefined;
+      this.postPills = [
+        {
+          key: this.nextPillKey(),
+          pillId: pill.id,
+          corner: (corner ?? '') as '' | PillCorner,
+          size: 'default',
+        },
+      ];
+      return;
+    }
+    this.postPills = [];
+  }
+
+  canAddPillRow(): boolean {
+    const pendingNew = this.showNewPill() && !!this.newPillText.trim();
+    return this.postPills.length + (pendingNew ? 1 : 0) < 4;
+  }
+
+  /** More than one placed pill (or one + pending new) requires explicit corners. */
+  requiresExplicitCorners(): boolean {
+    const pendingNew = this.showNewPill() && !!this.newPillText.trim();
+    return this.postPills.length + (pendingNew ? 1 : 0) > 1;
+  }
+
+  requiresExplicitCornersForNew(): boolean {
+    return this.postPills.length >= 1;
+  }
+
+  isPillTaken(pillId: string, exceptKey?: string): boolean {
+    return this.postPills.some((r) => r.pillId === pillId && r.key !== exceptKey);
+  }
+
+  isCornerTaken(corner: PillCorner, exceptKey?: string): boolean {
+    return this.postPills.some((r) => r.corner === corner && r.key !== exceptKey);
+  }
+
+  addPillRow() {
+    if (!this.canAddPillRow()) return;
+    this.postPills = [
+      ...this.postPills,
+      { key: this.nextPillKey(), pillId: '', corner: '', size: 'default' },
+    ];
+    if (this.requiresExplicitCorners()) {
+      for (const row of this.postPills) {
+        if (!row.corner) {
+          row.corner = this.firstFreeCorner() ?? 'top-right';
+        }
+      }
+    }
+  }
+
+  removePillRow(index: number) {
+    this.postPills = this.postPills.filter((_, i) => i !== index);
+  }
+
+  private firstFreeCorner(): PillCorner | null {
+    const used = new Set(this.postPills.map((r) => r.corner).filter((c): c is PillCorner => !!c));
+    if (this.showNewPill() && this.newPillCorner) used.add(this.newPillCorner);
+    const all: PillCorner[] = ['top-right', 'top-left', 'bottom-right', 'bottom-left'];
+    return all.find((c) => !used.has(c)) ?? null;
   }
 
   async onVideoFileChange(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    const rejection = videoFileRejection(file);
+    if (rejection) {
+      this.toast.error(rejection);
+      input.value = '';
+      return;
+    }
     this.uploadingVideo.set(true);
     this.api.uploadMedia(file).subscribe({
       next: (media) => {
@@ -1126,7 +1640,7 @@ export class PostEditComponent implements OnInit {
       },
       error: (e) => {
         this.uploadingVideo.set(false);
-        this.toast.error(e?.error?.message || 'Eroare la încărcarea videoclipului');
+        this.toast.error(videoUploadErrorMessage(e));
       },
     });
   }
@@ -1191,20 +1705,18 @@ export class PostEditComponent implements OnInit {
       });
   }
 
-  save(options: { transitionAfterSave?: 'submit' } = {}) {
-    let pillPayload: {
-      pillId?: string | null;
-      pillText?: string | null;
-      pillColor?: string | null;
-      pillTextColor?: string | null;
-    };
+  openPreview() {
+    let pillsPayload: ReturnType<PostEditComponent['buildPillsPayload']>;
     try {
-      pillPayload = this.buildPillPayload();
+      pillsPayload = this.buildPillsPayload();
     } catch {
       return;
     }
-    const data = {
+
+    const data: PostPreviewRequest = {
+      id: this.postId() ?? undefined,
       title: this.title,
+      kicker: this.kicker.trim() || null,
       slug: this.slug || undefined,
       excerpt: this.excerpt || null,
       contentHtml: this.contentHtml,
@@ -1219,8 +1731,60 @@ export class PostEditComponent implements OnInit {
       videoUrl: this.resolveVideoUrlForSave(),
       categoryIds: this.primaryCategoryId ? [this.primaryCategoryId] : [],
       primaryCategoryId: this.primaryCategoryId || null,
+      tagNames: this.buildTagNamesPayload(),
       bulbi: this.buildBulbiPayload(),
-      ...pillPayload,
+      photoCaptions: this.buildPhotoCaptionsPayload(),
+      pills: pillsPayload,
+    };
+
+    this.previewOpen.set(true);
+    this.previewing.set(true);
+    this.api.previewPost(data).subscribe({
+      next: ({ token }) => {
+        this.previewIframeSrc.set(resolvePreviewArticleUrl(token));
+        this.previewing.set(false);
+      },
+      error: (e) => {
+        this.previewing.set(false);
+        if (!this.previewIframeSrc()) this.previewOpen.set(false);
+        this.toast.error(e?.error?.message || 'Eroare la previzualizare');
+      },
+    });
+  }
+
+  closePreview() {
+    this.previewOpen.set(false);
+    this.previewing.set(false);
+    this.previewIframeSrc.set(null);
+  }
+
+  save(options: { transitionAfterSave?: 'submit' } = {}) {
+    let pillsPayload: ReturnType<PostEditComponent['buildPillsPayload']>;
+    try {
+      pillsPayload = this.buildPillsPayload();
+    } catch {
+      return;
+    }
+    const data = {
+      title: this.title,
+      kicker: this.kicker.trim() || null,
+      slug: this.slug || undefined,
+      contentHtml: this.contentHtml,
+      publishedAt: this.buildPublishedAtForSave(),
+      seoTitle: this.seoTitle || null,
+      seoDescription: this.seoDescription || null,
+      authorName: this.authorName || null,
+      showDate: this.showDate,
+      showAuthor: this.showAuthor,
+      showSummary: this.showSummary,
+      heroMediaId: this.heroMediaId() ?? null,
+      videoUrl: this.resolveVideoUrlForSave(),
+      categoryIds: this.primaryCategoryId ? [this.primaryCategoryId] : [],
+      primaryCategoryId: this.primaryCategoryId || null,
+      tagNames: this.buildTagNamesPayload(),
+      bulbi: this.buildBulbiPayload(),
+      photoCaptions: this.buildPhotoCaptionsPayload(),
+      pills: pillsPayload,
     };
 
     this.saving.set(true);
@@ -1236,16 +1800,26 @@ export class PostEditComponent implements OnInit {
         const savedId = (post as { id: string }).id;
         const wasNew = this.isNew();
         const finish = () => {
-          const savedPill = (post as { pill?: Pill | null }).pill;
-          if (savedPill) {
-            this.selectedPillId = savedPill.id;
-            this.showNewPill.set(false);
-            this.newPillText = '';
+          this.loadPostPills(post as Record<string, unknown>);
+          const savedPlacements = ((post as { pills?: PostPillPlacement[] }).pills ?? []).map(
+            (p) => p.pill,
+          );
+          for (const savedPill of savedPlacements) {
             if (!this.pills().some((p) => p.id === savedPill.id)) {
               this.pills.update((list) => [...list, savedPill]);
             }
           }
+          this.showNewPill.set(false);
+          this.newPillText = '';
+          this.newPillCorner = '';
+          this.newPillSize = 'default';
           this.bulbi = this.mapBulbiFromPost((post as { bulbi?: unknown }).bulbi);
+          this.photoCaptions = this.mapPhotoCaptionsFromPost(
+            (post as { photoCaptions?: unknown }).photoCaptions,
+          );
+          const savedTags = (post as { tags?: Array<{ name: string }> }).tags ?? [];
+          this.tags = savedTags.map((t) => t.name).filter(Boolean);
+          this.tagInput = '';
           if (options.transitionAfterSave) {
             this.postId.set(savedId);
             this.transitionSavedPost(savedId, options.transitionAfterSave, () => {
@@ -1310,12 +1884,17 @@ export class PostEditComponent implements OnInit {
   deletePost() {
     const id = this.postId();
     if (!id) return;
-    if (!confirm('Sigur vrei să ștergi acest articol? Acțiunea este ireversibilă.')) return;
+    if (
+      !confirm(
+        'Muți articolul în coș? Rămâne acolo 30 de zile și îl poți recupera, sau îl poți șterge definitiv din coș.',
+      )
+    )
+      return;
     this.saving.set(true);
     this.api.deletePost(id).subscribe({
       next: () => {
         this.saving.set(false);
-        this.toast.success('Articol șters.');
+        this.toast.success('Articol mutat în coș.');
         this.router.navigate(['/posts']);
       },
       error: (e) => {
@@ -1325,13 +1904,65 @@ export class PostEditComponent implements OnInit {
     });
   }
 
-  private buildPillPayload(): {
+  private buildPillsPayload(): Array<{
     pillId?: string | null;
     pillText?: string | null;
     pillColor?: string | null;
     pillTextColor?: string | null;
-  } {
-    if (this.showNewPill() && this.newPillText.trim()) {
+    corner?: PillCorner | null;
+    size?: PillSize;
+  }> {
+    const rows = this.postPills.filter((r) => !!r.pillId);
+    const pendingNew = this.showNewPill() && !!this.newPillText.trim();
+    const total = rows.length + (pendingNew ? 1 : 0);
+
+    if (total > 4) {
+      this.toast.error('Maxim 4 pill-uri pe articol');
+      throw new Error('too many pills');
+    }
+
+    const pillIds = rows.map((r) => r.pillId);
+    if (new Set(pillIds).size !== pillIds.length) {
+      this.toast.error('Același pill nu poate fi atașat de două ori');
+      throw new Error('duplicate pill');
+    }
+
+    if (total > 1) {
+      for (const row of rows) {
+        if (!row.corner) {
+          this.toast.error('Alege un colț pentru fiecare pill');
+          throw new Error('corner required');
+        }
+      }
+      if (pendingNew && !this.newPillCorner) {
+        this.toast.error('Alege un colț pentru pill-ul nou');
+        throw new Error('new pill corner required');
+      }
+    }
+
+    const corners = [
+      ...rows.map((r) => r.corner).filter((c): c is PillCorner => !!c),
+      ...(pendingNew && this.newPillCorner ? [this.newPillCorner] : []),
+    ];
+    if (new Set(corners).size !== corners.length) {
+      this.toast.error('Fiecare pill trebuie să aibă un colț diferit');
+      throw new Error('duplicate corner');
+    }
+
+    const payload: Array<{
+      pillId?: string | null;
+      pillText?: string | null;
+      pillColor?: string | null;
+      pillTextColor?: string | null;
+      corner?: PillCorner | null;
+      size?: PillSize;
+    }> = rows.map((r) => ({
+      pillId: r.pillId,
+      corner: (r.corner || null) as PillCorner | null,
+      size: r.size ?? 'default',
+    }));
+
+    if (pendingNew) {
       if (!/^#[0-9a-fA-F]{6}$/.test(this.newPillColor)) {
         this.toast.error('Culoarea fundalului trebuie să fie în format #RRGGBB');
         throw new Error('invalid pill color');
@@ -1340,14 +1971,16 @@ export class PostEditComponent implements OnInit {
         this.toast.error('Culoarea textului trebuie să fie în format #RRGGBB');
         throw new Error('invalid pill text color');
       }
-      return {
-        pillId: null,
+      payload.push({
         pillText: this.newPillText.trim(),
         pillColor: this.newPillColor,
         pillTextColor: this.newPillTextColor,
-      };
+        corner: (this.newPillCorner || null) as PillCorner | null,
+        size: this.newPillSize,
+      });
     }
-    return { pillId: this.selectedPillId || null };
+
+    return payload;
   }
 
   formatDate(d: unknown): string {

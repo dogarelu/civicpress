@@ -748,9 +748,18 @@ async function ensureDefaultCategories(): Promise<Map<string, string>> {
         slug: cat.slug,
         color: cat.color,
         showInMenu: true,
+        showInMobileMenu: true,
+        showInMobileRow: true,
         menuOrder: cat.menuOrder,
       },
-      update: { name: cat.name, color: cat.color, showInMenu: true, menuOrder: cat.menuOrder },
+      update: {
+        name: cat.name,
+        color: cat.color,
+        showInMenu: true,
+        showInMobileMenu: true,
+        showInMobileRow: true,
+        menuOrder: cat.menuOrder,
+      },
     });
     idMap.set(cat.slug, record.id);
   }
@@ -879,6 +888,8 @@ async function importWpData(
               slug: normalizedSlug,
               description: cat.description || null,
               showInMenu: false,
+              showInMobileMenu: false,
+              showInMobileRow: false,
               externalId: String(cat.term_id),
             },
           })
@@ -888,6 +899,8 @@ async function importWpData(
               slug: normalizedSlug,
               description: cat.description || null,
               showInMenu: false,
+              showInMobileMenu: false,
+              showInMobileRow: false,
               menuOrder: 99,
               externalId: String(cat.term_id),
             },

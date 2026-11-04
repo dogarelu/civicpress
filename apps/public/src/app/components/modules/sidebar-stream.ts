@@ -22,7 +22,11 @@ export type SidebarStreamUnitKind =
   | 'article-list-block'
   | 'most-viewed-block'
   | 'single-category-block'
-  | 'category-strip';
+  | 'category-strip'
+  | 'featured-video-block'
+  | 'featured-article-block'
+  | 'featured-photo-block'
+  | 'featured-stack-block';
 
 export interface SidebarStreamUnit {
   key: string;
@@ -50,7 +54,11 @@ export function buildSidebarStream(
 
   sidebar.blocks.forEach((block, blockIndex) => {
     const extras = extraPostsByMode[block.mode] ?? [];
-    const displaySlotFallback: LayoutDisplaySlot = { showDate: true, showAuthor: true };
+    const displaySlotFallback: LayoutDisplaySlot = {
+      postId: null,
+      showDate: true,
+      showAuthor: true,
+    };
 
     switch (block.mode) {
       case 'latest': {
@@ -156,7 +164,7 @@ export function buildSidebarStream(
 
       case 'most-viewed': {
         units.push({
-          key: `most-viewed:${blockIndex}`,
+          key: `most-viewed:${block.blockId ?? blockIndex}`,
           blockIndex,
           mode: block.mode,
           kind: 'most-viewed-block',
@@ -205,6 +213,80 @@ export function buildSidebarStream(
           });
         }
         break;
+
+      case 'featured-video': {
+        const hasManual = (block.videoItems ?? []).some((video) => !!video.url);
+        const hasPost = blockPosts(block, extras).some((post) => !!post.videoUrl);
+        if (!hasManual && !hasPost) break;
+        units.push({
+          key: `featured-video:${block.blockId ?? blockIndex}`,
+          blockIndex,
+          mode: block.mode,
+          kind: 'featured-video-block',
+          block,
+          posts: blockPosts(block, extras).slice(0, 1),
+          videoItems: block.videoItems ?? [],
+          displaySlots: block.latestSlots,
+          strip: null,
+          maxPosts: 1,
+        });
+        break;
+      }
+
+      case 'featured-article': {
+        const posts = blockPosts(block, extras).slice(0, 1);
+        if (posts.length === 0) break;
+        units.push({
+          key: `featured-article:${block.blockId ?? blockIndex}`,
+          blockIndex,
+          mode: block.mode,
+          kind: 'featured-article-block',
+          block,
+          posts,
+          videoItems: [],
+          displaySlots: block.articleListSlots,
+          strip: null,
+          maxPosts: 1,
+        });
+        break;
+      }
+
+      case 'featured-photo': {
+        if (!block.featuredPhotoUrl) break;
+        units.push({
+          key: `featured-photo:${block.blockId ?? blockIndex}`,
+          blockIndex,
+          mode: block.mode,
+          kind: 'featured-photo-block',
+          block,
+          posts: [],
+          videoItems: [],
+          displaySlots: [],
+          strip: null,
+          maxPosts: null,
+        });
+        break;
+      }
+
+      case 'featured-stack': {
+        const secondaryCount = block.featuredSecondaryCount ?? 3;
+        const maxPosts = 1 + secondaryCount;
+        const posts = blockPosts(block, extras).slice(0, maxPosts);
+        if (posts.length === 0) break;
+        units.push({
+          key: `featured-stack:${block.blockId ?? blockIndex}`,
+          blockIndex,
+          mode: block.mode,
+          kind: 'featured-stack-block',
+          block,
+          posts,
+          videoItems: [],
+          displaySlots: block.latestSlots,
+          strip: null,
+          maxPosts,
+        });
+        break;
+      }
     }
   });
 

@@ -7,16 +7,17 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyCors from '@fastify/cors';
 import { AppModule } from './app.module';
+import { MAX_VIDEO_SIZE } from './modules/media/media.service';
 
 async function bootstrap() {
-  const adapter = new FastifyAdapter({ logger: false });
+  const adapter = new FastifyAdapter({ logger: false, bodyLimit: MAX_VIDEO_SIZE });
 
   adapter.register(fastifyCookie as any, {
     secret: process.env.COOKIE_SECRET || 'civicpress-cookie-secret',
   });
 
   adapter.register(fastifyMultipart as any, {
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: MAX_VIDEO_SIZE },
   });
 
   // Register helmet and cors on the underlying fastify instance before NestJS uses it

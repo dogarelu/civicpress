@@ -1,4 +1,4 @@
-import type { PublicSettings, MenuItem, ExchangeRatesResponse } from '@civicpress/shared';
+import type { PublicSettings, MenuItem, PublicTickerBarsResponse } from '@civicpress/shared';
 
 const BACKEND = process.env['BACKEND_URL'] ?? 'http://localhost:3000';
 
@@ -9,13 +9,12 @@ export const load = async ({
   params: Record<string, string>;
   event: unknown;
 }) => {
-  const [settings, menu, exchangeRates] = await Promise.all([
+  const [settings, menu, mobileMenu, mobileRow, tickerBars] = await Promise.all([
     fetch<PublicSettings>(`${BACKEND}/v1/settings/public`),
     fetch<MenuItem[]>(`${BACKEND}/v1/menu`),
-    fetch<ExchangeRatesResponse>(`${BACKEND}/v1/exchange-rates`).catch(() => ({
-      publishedAt: new Date().toISOString().slice(0, 10),
-      rates: [],
-    })),
+    fetch<MenuItem[]>(`${BACKEND}/v1/menu?variant=mobile`),
+    fetch<MenuItem[]>(`${BACKEND}/v1/menu?variant=mobile-row`),
+    fetch<PublicTickerBarsResponse>(`${BACKEND}/v1/ticker-bars`).catch(() => ({ bars: [] })),
   ]);
-  return { settings, menu, exchangeRates };
+  return { settings, menu, mobileMenu, mobileRow, tickerBars };
 };

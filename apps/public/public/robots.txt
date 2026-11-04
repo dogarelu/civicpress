@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /preview
+Disallow: /preview/
+Disallow: /admin
+Disallow: /admin/
+Disallow: /search
+Disallow: /search/
+
+Sitemap: https://civicpress.ro/sitemap.xml

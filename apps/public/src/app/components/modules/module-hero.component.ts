@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { RecomandareHeroComponent } from '../recomandare-hero.component';
-import type { ResolvedModule } from '@civicpress/shared';
+import type { PostDateFormat, ResolvedModule } from '@civicpress/shared';
 
 /** Module: one main article. */
 @Component({
@@ -14,6 +14,9 @@ import type { ResolvedModule } from '@civicpress/shared';
       [showAuthor]="item?.showAuthor ?? true"
       [showCategory]="showCategory"
       [showSummary]="showSummary"
+      [showBumbi]="showBumbi"
+      [dateFormat]="dateFormat"
+      [showReadingTime]="showReadingTime"
     />
   `,
 })
@@ -23,4 +26,7 @@ export class ModuleHeroComponent {
   @Input() showCategory = true;
   /** Show the excerpt text under the image. */
   @Input() showSummary = true;
+  @Input() showBumbi: boolean | null = null;
+  @Input() dateFormat: PostDateFormat | null = null;
+  @Input() showReadingTime = false;
 }

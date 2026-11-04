@@ -1,9 +1,10 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AuthStore } from '../../services/auth.store';
 import { ToastService } from '../../services/toast.service';
+import { SharePostModalComponent } from '../../components/share-post-modal.component';
 import type { AdminPostSummary, PostTransition } from '@civicpress/shared';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -25,7 +26,7 @@ const STATUS_COLORS: Record<string, string> = {
 @Component({
   selector: 'cp-posts-list',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, SharePostModalComponent],
   template: `
     <div class="p-6">
       <div class="flex items-center justify-between mb-6">
@@ -68,9 +69,7 @@ const STATUS_COLORS: Record<string, string> = {
             <tr class="border-b border-gray-100 bg-gray-50">
               <th class="text-left px-4 py-3 font-medium text-gray-600">Titlu</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Status</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">
-                Autor
-              </th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Autor</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600 hidden lg:table-cell">
                 Categorie
               </th>
@@ -111,8 +110,11 @@ const STATUS_COLORS: Record<string, string> = {
                     {{ statusLabel(post.status) }}
                   </span>
                 </td>
-                <td class="px-4 py-3 hidden md:table-cell text-gray-500">
-                  {{ post.authorName ?? post.author?.displayName ?? '—' }}
+                <td class="px-4 py-3 text-gray-500">
+                  <div>{{ post.authorName ?? post.author?.displayName ?? '—' }}</div>
+                  @if (auth.isAdmin() && creatorUsername(post); as username) {
+                    <div class="text-xs text-gray-400 mt-0.5">{{ username }}</div>
+                  }
                 </td>
                 <td class="px-4 py-3 hidden lg:table-cell">
                   @if (post.primaryCategory) {
@@ -128,7 +130,14 @@ const STATUS_COLORS: Record<string, string> = {
                   {{ post.viewCount ?? 0 }}
                 </td>
                 <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-2">
+                  <div class="flex items-center justify-end gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      (click)="openShare(post)"
+                      class="text-xs text-indigo-600 hover:underline"
+                    >
+                      Distribuie
+                    </button>
                     <a
                       [routerLink]="['/posts', post.id, 'edit']"
                       class="text-xs text-blue-600 hover:underline"
@@ -213,6 +222,10 @@ const STATUS_COLORS: Record<string, string> = {
           </div>
         }
       </div>
+
+      @if (sharePost()) {
+        <cp-share-post-modal [post]="sharePost()" (close)="sharePost.set(null)" />
+      }
     </div>
   `,
 })
@@ -226,6 +239,7 @@ export class PostsListComponent implements OnInit {
   page = signal(1);
   perPage = 20;
   loading = signal(false);
+  sharePost = signal<AdminPostSummary | null>(null);
   search = '';
   statusFilter = '';
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -275,6 +289,14 @@ export class PostsListComponent implements OnInit {
   nextPage() {
     this.page.update((p) => p + 1);
     this.load();
+  }
+
+  openShare(post: AdminPostSummary) {
+    this.sharePost.set(post);
+  }
+
+  creatorUsername(post: AdminPostSummary): string | null {
+    return post.createdByUsername?.trim() || post.author?.displayName?.trim() || null;
   }
 
   canSubmit(post: AdminPostSummary): boolean {

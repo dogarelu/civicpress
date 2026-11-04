@@ -1,8 +1,8 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type { PostSummary } from '@civicpress/shared';
-import { formatPostDateForList } from '../utils/post-date-display';
+import { SiteSettingsService } from '../services/site-settings.service';
 
 @Component({
   selector: 'cp-post-card-list',
@@ -52,9 +52,11 @@ import { formatPostDateForList } from '../utils/post-date-display';
   `,
 })
 export class PostCardListComponent {
+  private siteSettings = inject(SiteSettingsService);
+
   @Input() post: PostSummary | null = null;
 
   formatDate(dateStr: string): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr);
   }
 }

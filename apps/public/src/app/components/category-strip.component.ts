@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import type { CategoryStrip } from '@civicpress/shared';
+import { normalizeCategoryColor, type CategoryStrip } from '@civicpress/shared';
 
 @Component({
   selector: 'cp-category-strip',
@@ -11,11 +11,14 @@ import type { CategoryStrip } from '@civicpress/shared';
     @if (strip) {
       <section class="mb-8">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="font-heading text-lg font-extrabold uppercase tracking-wide relative">
-            <span class="relative z-10 pr-3 bg-background text-gray-800">{{
-              strip.category.name
-            }}</span>
-            <span class="absolute bottom-0 left-0 w-full h-[3px] bg-gray-300"></span>
+          <h2
+            class="font-heading uppercase tracking-wide relative"
+            [class.cp-module-section-title--cat-pill]="!!stripCategoryColor"
+            [style.--category-color]="stripCategoryColor"
+            style="font-size: var(--row-header-font-size, 18px); font-weight: var(--row-header-font-weight, 800); color: var(--row-header-color, #1f2937);"
+          >
+            <span class="cp-module-section-title-text">{{ strip.category.name }}</span>
+            <span class="cp-module-section-title-rule" aria-hidden="true"></span>
           </h2>
           <a
             [routerLink]="['/category', strip.category.slug]"
@@ -26,9 +29,7 @@ import type { CategoryStrip } from '@civicpress/shared';
 
         <div [class]="gridClass">
           @for (post of strip.posts; track post.id; let i = $index) {
-            <article
-              class="group bg-white border border-border rounded-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
-            >
+            <article class="group bg-background px-4 pt-3 pb-3">
               <a [routerLink]="'/' + post.slug" class="block">
                 @if (post.heroImage) {
                   <div class="overflow-hidden bg-muted aspect-[16/9]">
@@ -43,7 +44,7 @@ import type { CategoryStrip } from '@civicpress/shared';
                   </div>
                 }
               </a>
-              <div class="p-3">
+              <div class="pt-3">
                 <h3
                   class="font-heading leading-tight text-secondary"
                   style="font-size: var(--news-title-font-size, 20px); font-weight: var(--news-title-font-weight, 700); color: var(--news-title-color, currentColor);"
@@ -66,10 +67,16 @@ import type { CategoryStrip } from '@civicpress/shared';
 export class CategoryStripComponent {
   @Input() strip: CategoryStrip | null = null;
 
+  get stripCategoryColor(): string | null {
+    return normalizeCategoryColor(this.strip?.category.color) ?? null;
+  }
+
   get gridClass(): string {
     const count = this.strip?.posts?.length ?? 1;
-    if (count >= 3) return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4';
-    if (count === 2) return 'grid grid-cols-1 sm:grid-cols-2 gap-4';
-    return 'grid grid-cols-1 gap-4';
+    if (count >= 3) {
+      return 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-gray-400 md:-mx-4';
+    }
+    if (count === 2) return 'grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-400 md:-mx-4';
+    return 'grid grid-cols-1';
   }
 }

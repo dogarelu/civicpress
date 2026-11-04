@@ -1,13 +1,14 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type { PostSummary } from '@civicpress/shared';
-import { formatPostDateForList } from '../utils/post-date-display';
+import { PostSubtitleComponent } from './post-subtitle.component';
+import { SiteSettingsService } from '../services/site-settings.service';
 
 @Component({
   selector: 'cp-post-card',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, PostSubtitleComponent],
   template: `
     @if (post) {
       <article class="group">
@@ -40,9 +41,13 @@ import { formatPostDateForList } from '../utils/post-date-display';
               {{ post.title }}
             </a>
           </h3>
-          @if (showExcerpt && post.excerpt) {
-            <p class="text-sm text-gray-600 mt-1 line-clamp-3">{{ cleanExcerpt }}</p>
-          }
+          <cp-post-subtitle
+            [show]="showExcerpt"
+            [bulbi]="post.bulbi ?? []"
+            [excerpt]="post.excerpt"
+            listClass="text-sm text-gray-600 mt-1"
+            textClass="text-sm text-gray-600 mt-1"
+          />
           @if (showMeta) {
             <div class="flex items-center gap-2 mt-2 text-xs text-gray-500">
               @if (canShowAuthor(post) && displayAuthor(post); as authorName) {
@@ -62,6 +67,8 @@ import { formatPostDateForList } from '../utils/post-date-display';
   `,
 })
 export class PostCardComponent {
+  private siteSettings = inject(SiteSettingsService);
+
   @Input() post: PostSummary | null = null;
   @Input() imageClass = 'aspect-[16/9]';
   @Input() titleClass = 'font-heading font-semibold text-sm leading-tight text-secondary';
@@ -81,12 +88,7 @@ export class PostCardComponent {
     return post.showAuthor !== false && !!this.displayAuthor(post);
   }
 
-  get cleanExcerpt(): string {
-    if (!this.post?.excerpt) return '';
-    return this.post.excerpt.replace(/<[^>]*>/g, '').trim();
-  }
-
   formatDate(dateStr: string): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr);
   }
 }

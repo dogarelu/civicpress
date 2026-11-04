@@ -35,7 +35,7 @@ server {
     listen [::]:80;
     server_name civicpress.ro www.civicpress.ro;
 
-    client_max_body_size 20m;
+    client_max_body_size 110m;
     proxy_read_timeout 120s;
     proxy_send_timeout 120s;
     proxy_connect_timeout 10s;
@@ -55,6 +55,9 @@ server {
     location /v1/ {
         proxy_pass http://127.0.0.1:3000/v1/;
         proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
     }
 
     location = /admin {

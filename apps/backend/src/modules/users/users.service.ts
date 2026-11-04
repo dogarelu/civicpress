@@ -156,7 +156,7 @@ export class UsersService {
         isActive: true,
         createdAt: true,
         lastLoginAt: true,
-        _count: { select: { posts: true } },
+        _count: { select: { posts: { where: { deletedAt: null } } } },
       },
     });
     if (!user) throw new NotFoundException('User not found');

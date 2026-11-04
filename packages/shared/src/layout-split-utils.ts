@@ -1,12 +1,19 @@
 import type { LayoutModule, ModuleType } from './schemas.js';
 import { isFullWidthModuleType } from './schemas.js';
 
+type FullWidthAwareModule = {
+  type: ModuleType;
+  options?: { count?: number | null } | null;
+  /** Resolved modules may expose count at the top level. */
+  count?: number | null;
+};
+
 /** Count contiguous with-sidebar sections separated by full-width modules. */
-export function countWithSidebarSections(modules: ReadonlyArray<{ type: ModuleType }>): number {
+export function countWithSidebarSections(modules: ReadonlyArray<FullWidthAwareModule>): number {
   let count = 0;
   let inSection = false;
   for (const mod of modules) {
-    if (isFullWidthModuleType(mod.type)) {
+    if (isFullWidthModuleType(mod.type, { count: mod.options?.count ?? mod.count })) {
       inSection = false;
     } else if (!inSection) {
       count++;

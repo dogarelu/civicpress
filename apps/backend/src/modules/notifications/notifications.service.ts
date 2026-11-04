@@ -45,7 +45,7 @@ export class NotificationsService {
     const recipients = await this.prisma.user.findMany({
       where: {
         isActive: true,
-        role: { in: [Role.EDITOR, Role.ADMIN] },
+        role: { in: [Role.EDITOR, Role.CHIEF_EDITOR, Role.ADMIN] },
         id: { not: actorId },
         OR: [{ notifyReviewEmail: true }, { notifyReviewSignal: true }],
       },

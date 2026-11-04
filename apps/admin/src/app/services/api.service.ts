@@ -3,9 +3,12 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import type {
   AdminPostSummary,
   PostCreate,
+  PostPreviewRequest,
+  PostPreviewToken,
   PostTransition,
   PostUpdate,
   AuditEntry,
+  AuthorPostStats,
   Me,
   AdminLayouts,
   LayoutPageId,
@@ -16,6 +19,7 @@ import type {
   CategoryUpdate,
   AdminSettings,
   SettingsUpdate,
+  TickerBarConfig,
   UserSummary,
   UserDetail,
   UserCreate,
@@ -26,9 +30,27 @@ import type {
   Pill,
   PillCreate,
   PillUpdate,
+  AnalyticsOverview,
+  AnalyticsPageStat,
+  AnalyticsPageDetail,
+  UtmPreset,
+  UtmPresetCreate,
+  UtmPresetUpdate,
 } from '@civicpress/shared';
 
 const API = '/v1';
+
+export interface TrashPost {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  deletedAt: string;
+  purgeAt: string;
+  daysRemaining: number;
+  authorName: string | null;
+  primaryCategory: { id: string; name: string; slug: string; color: string | null } | null;
+}
 
 export interface PaginatedResponse<T> {
   total: number;
@@ -61,12 +83,30 @@ export class ApiService {
     return this.http.get<Record<string, unknown>>(`${API}/admin/posts/${id}`);
   }
 
+  getArticleReferences(ids: string[]) {
+    const params = new HttpParams().set('ids', ids.join(','));
+    return this.http.get<{
+      posts: Array<{ id: string; title: string; href: string; imageUrl: string | null }>;
+    }>(`${API}/admin/posts/references`, { params });
+  }
+
   createPost(data: PostCreate) {
     return this.http.post<Record<string, unknown>>(`${API}/posts`, data);
   }
 
+  createPostFromVideo(data: { title: string; videoUrl: string; categoryId: string }) {
+    return this.http.post<{ id: string; title: string; slug: string; videoUrl?: string | null }>(
+      `${API}/posts/from-video`,
+      data,
+    );
+  }
+
   updatePost(id: string, data: PostUpdate) {
     return this.http.patch<Record<string, unknown>>(`${API}/posts/${id}`, data);
+  }
+
+  previewPost(data: PostPreviewRequest) {
+    return this.http.post<PostPreviewToken>(`${API}/admin/posts/preview`, data);
   }
 
   transitionPost(id: string, action: PostTransition['action'], message?: string) {
@@ -78,6 +118,28 @@ export class ApiService {
 
   deletePost(id: string) {
     return this.http.delete<{ ok: boolean }>(`${API}/posts/${id}`);
+  }
+
+  getTrash(opts: { page?: number; perPage?: number; search?: string } = {}) {
+    let params = new HttpParams();
+    if (opts.page) params = params.set('page', opts.page);
+    if (opts.perPage) params = params.set('perPage', opts.perPage);
+    if (opts.search) params = params.set('search', opts.search);
+    return this.http.get<{
+      posts: TrashPost[];
+      total: number;
+      page: number;
+      perPage: number;
+      retentionDays: number;
+    }>(`${API}/posts/trash`, { params });
+  }
+
+  restorePost(id: string) {
+    return this.http.post<{ id: string; status: string }>(`${API}/posts/${id}/restore`, {});
+  }
+
+  permanentDeletePost(id: string) {
+    return this.http.delete<{ ok: boolean }>(`${API}/posts/${id}/permanent`);
   }
 
   getRevisions(postId: string) {
@@ -114,6 +176,10 @@ export class ApiService {
       `${API}/audit`,
       { params },
     );
+  }
+
+  getAuthorPostStats() {
+    return this.http.get<AuthorPostStats>(`${API}/audit/author-stats`);
   }
 
   // ─── Users ────────────────────────────────────────────────────────────────
@@ -221,6 +287,14 @@ export class ApiService {
     return this.http.patch<AdminSettings>(`${API}/admin/settings`, data);
   }
 
+  getTickerBars() {
+    return this.http.get<{ bars: TickerBarConfig[] }>(`${API}/admin/ticker-bars`);
+  }
+
+  saveTickerBars(bars: TickerBarConfig[]) {
+    return this.http.put<{ bars: TickerBarConfig[] }>(`${API}/admin/ticker-bars`, { bars });
+  }
+
   // ─── Notification preferences ─────────────────────────────────────────────
 
   getMe() {
@@ -233,5 +307,54 @@ export class ApiService {
 
   updateNotificationPrefs(data: NotificationPrefsUpdate) {
     return this.updateMe(data);
+  }
+
+  // ─── Analytics ────────────────────────────────────────────────────────────
+
+  getAnalyticsOverview(from?: string, to?: string, postId?: string) {
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    if (postId) params = params.set('postId', postId);
+    return this.http.get<AnalyticsOverview>(`${API}/admin/analytics/overview`, { params });
+  }
+
+  getAnalyticsArticle(postId: string, from?: string, to?: string) {
+    let params = new HttpParams().set('postId', postId);
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    return this.http.get<AnalyticsOverview>(`${API}/admin/analytics/article`, { params });
+  }
+
+  getAnalyticsPages(from?: string, to?: string) {
+    let params = new HttpParams();
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    return this.http.get<AnalyticsPageStat[]>(`${API}/admin/analytics/pages`, { params });
+  }
+
+  getAnalyticsPageDetail(path: string, from?: string, to?: string) {
+    let params = new HttpParams().set('path', path);
+    if (from) params = params.set('from', from);
+    if (to) params = params.set('to', to);
+    return this.http.get<AnalyticsPageDetail>(`${API}/admin/analytics/page`, { params });
+  }
+
+  // ─── UTM presets ──────────────────────────────────────────────────────────
+
+  getUtmPresets() {
+    return this.http.get<UtmPreset[]>(`${API}/admin/utm-presets`);
+  }
+
+  createUtmPreset(data: UtmPresetCreate) {
+    return this.http.post<UtmPreset>(`${API}/admin/utm-presets`, data);
+  }
+
+  updateUtmPreset(id: string, data: UtmPresetUpdate) {
+    return this.http.patch<UtmPreset>(`${API}/admin/utm-presets/${id}`, data);
+  }
+
+  deleteUtmPreset(id: string) {
+    return this.http.delete<{ ok: boolean; id: string }>(`${API}/admin/utm-presets/${id}`);
   }
 }

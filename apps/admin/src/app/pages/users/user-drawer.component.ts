@@ -19,12 +19,14 @@ export type DrawerMode = 'info' | 'edit' | 'create';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Admin',
+  CHIEF_EDITOR: 'Editor șef',
   EDITOR: 'Editor',
   AUTHOR: 'Autor',
 };
 
 const ROLE_COLORS: Record<string, string> = {
   ADMIN: 'bg-red-100 text-red-700',
+  CHIEF_EDITOR: 'bg-purple-100 text-purple-700',
   EDITOR: 'bg-blue-100 text-blue-700',
   AUTHOR: 'bg-gray-100 text-gray-700',
 };
@@ -227,6 +229,7 @@ function generatePassword(): string {
               >
                 <option value="AUTHOR">Autor</option>
                 <option value="EDITOR">Editor</option>
+                <option value="CHIEF_EDITOR">Editor șef</option>
                 <option value="ADMIN">Admin</option>
               </select>
               @if (isSelf()) {
@@ -336,6 +339,7 @@ function generatePassword(): string {
                 >
                   <option value="AUTHOR">Autor</option>
                   <option value="EDITOR">Editor</option>
+                  <option value="CHIEF_EDITOR">Editor șef</option>
                   <option value="ADMIN">Admin</option>
                 </select>
               </div>
@@ -580,7 +584,7 @@ export class UserDrawerComponent implements OnInit, OnChanges {
       .createUser({
         email: this.createEmail.trim(),
         displayName: this.createDisplayName.trim(),
-        role: this.createRole as 'AUTHOR' | 'EDITOR' | 'ADMIN',
+        role: this.createRole as 'AUTHOR' | 'EDITOR' | 'CHIEF_EDITOR' | 'ADMIN',
         password: this.createPassword,
       })
       .subscribe({

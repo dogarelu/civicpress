@@ -1,33 +1,64 @@
 import {
   Component,
-  ViewChild,
+  DestroyRef,
   ElementRef,
+  PLATFORM_ID,
+  ViewChild,
   computed,
   effect,
-  input,
-  signal,
   inject,
+  input,
+  output,
+  signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { resolveVideoPlaybackUrl } from '@civicpress/shared';
+import { resolveVideoPlaybackUrl, youtubeThumbnailUrl } from '@civicpress/shared';
+import { VideoPlayBadgeComponent } from './video-play-badge.component';
+
+type FullscreenHost = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+  webkitRequestFullScreen?: () => Promise<void> | void;
+};
+
+type FullscreenVideo = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void;
+};
+
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
 
 @Component({
   selector: 'cp-video-player',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, VideoPlayBadgeComponent],
+  host: {
+    class: 'block w-full h-full',
+    '[attr.data-playing]': 'playing()',
+  },
+  styles: [
+    `
+      :host {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    `,
+  ],
   template: `
     <div
       #container
       class="relative w-full h-full bg-black overflow-hidden"
-      [class.rounded]="rounded()"
+      [class.rounded]="rounded() && !isFullscreen()"
     >
       @if (!playing()) {
         <button
           type="button"
-          class="absolute inset-0 z-10 flex items-center justify-center group"
+          class="absolute inset-0 z-10 group"
           (click)="startPlayback()"
-          [attr.aria-label]="'Redă ' + title()"
+          [attr.aria-label]="playAriaLabel()"
         >
           @if (displayPosterUrl(); as poster) {
             <img
@@ -39,31 +70,28 @@ import { resolveVideoPlaybackUrl } from '@civicpress/shared';
               class="absolute inset-0 bg-black/35 group-hover:bg-black/25 transition-colors"
             ></div>
           }
-          <span
-            class="relative z-10 w-14 h-14 rounded-full bg-white/90 text-gray-900 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform"
-          >
-            <svg class="w-7 h-7 ml-1" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </span>
+          <cp-video-play-badge [size]="playButton()" />
         </button>
-      } @else if (playback().type === 'youtube') {
-        <iframe
-          [src]="safeEmbedUrl()"
-          class="absolute inset-0 w-full h-full"
-          frameborder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowfullscreen
-        ></iframe>
       } @else {
-        <video
-          #videoEl
-          [src]="playback().src"
-          class="absolute inset-0 w-full h-full object-contain bg-black"
-          controls
-          playsinline
-          (click)="$event.stopPropagation()"
-        ></video>
+        @if (isYoutube()) {
+          <iframe
+            [src]="safeEmbedUrl()"
+            class="absolute inset-0 w-full h-full"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+            allowfullscreen
+          ></iframe>
+        } @else {
+          <video
+            #videoEl
+            [src]="playback().src"
+            class="absolute inset-0 w-full h-full object-contain bg-black"
+            controls
+            playsinline
+            webkit-playsinline
+            (click)="$event.stopPropagation()"
+          ></video>
+        }
       }
 
       @if (showControls() && playing()) {
@@ -82,6 +110,9 @@ import { resolveVideoPlaybackUrl } from '@civicpress/shared';
 })
 export class VideoPlayerComponent {
   private sanitizer = inject(DomSanitizer);
+  private document = inject(DOCUMENT);
+  private platformId = inject(PLATFORM_ID);
+  private destroyRef = inject(DestroyRef);
 
   videoUrl = input.required<string>();
   title = input('');
@@ -89,19 +120,27 @@ export class VideoPlayerComponent {
   rounded = input(true);
   showControls = input(true);
   autoplayOnStart = input(true);
+  /** When true, start playback as soon as `videoUrl` is shown/changed (e.g. playlist swap). */
+  autoStart = input(false);
+  playButton = input<'sm' | 'md' | 'lg'>('lg');
+  playingChange = output<boolean>();
 
   @ViewChild('container') containerRef?: ElementRef<HTMLElement>;
   @ViewChild('videoEl') videoEl?: ElementRef<HTMLVideoElement>;
 
   playing = signal(false);
   isFullscreen = signal(false);
+  /** Last URL the reset/auto-start effect already handled. */
+  private handledVideoUrl: string | null = null;
 
   playback = computed(() => resolveVideoPlaybackUrl(this.videoUrl()));
+  isYoutube = computed(() => this.playback().type === 'youtube');
+  playAriaLabel = computed(() => `Redă ${this.title()}`);
   displayPosterUrl = computed(() => {
     const explicitPoster = this.posterUrl();
     if (explicitPoster) return explicitPoster;
     if (this.playback().type !== 'youtube') return null;
-    return this.youtubeThumbnailUrl(this.videoUrl());
+    return youtubeThumbnailUrl(this.videoUrl());
   });
 
   /**
@@ -110,27 +149,57 @@ export class VideoPlayerComponent {
    * src on every cycle and the YouTube player reloads continuously.
    */
   safeEmbedUrl = computed<SafeResourceUrl>(() => {
-    const src = this.playback().src;
-    const url = this.autoplayOnStart() ? `${src}${src.includes('?') ? '&' : '?'}autoplay=1` : src;
-    return this.sanitizer.bypassSecurityTrustResourceUrl(url);
+    const src = this.withYoutubeInlineParams(this.playback().src, this.autoplayOnStart());
+    return this.sanitizer.bypassSecurityTrustResourceUrl(src);
   });
 
   constructor() {
-    // Back to the poster/play state when the parent swaps in a different video.
+    // Only reset/auto-start when the bound video URL changes.
+    // Parent CD rebinds the same URL every cycle; treating that as a
+    // change immediately cleared `playing` and blocked the play button.
     effect(
       () => {
-        this.videoUrl();
-        this.playing.set(false);
+        const url = this.videoUrl();
+        const autoStart = this.autoStart();
+        if (url === this.handledVideoUrl) return;
+        this.handledVideoUrl = url;
+        if (autoStart) {
+          this.beginPlayback();
+        } else {
+          this.setPlaying(false);
+        }
       },
       { allowSignalWrites: true },
     );
+
+    if (isPlatformBrowser(this.platformId)) {
+      const onFullscreenChange = () => this.isFullscreen.set(this.hasFullscreenElement());
+      this.document.addEventListener('fullscreenchange', onFullscreenChange);
+      this.document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+      this.destroyRef.onDestroy(() => {
+        this.document.removeEventListener('fullscreenchange', onFullscreenChange);
+        this.document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      });
+    }
   }
 
   startPlayback() {
-    this.playing.set(true);
-    queueMicrotask(() => {
+    this.beginPlayback();
+  }
+
+  private setPlaying(value: boolean) {
+    if (this.playing() === value) return;
+    this.playing.set(value);
+    this.playingChange.emit(value);
+  }
+
+  private beginPlayback() {
+    this.setPlaying(true);
+    // ViewChild is only available after the next CD cycle creates <video>.
+    setTimeout(() => {
       const video = this.videoEl?.nativeElement;
       if (video && this.autoplayOnStart()) {
+        video.playsInline = true;
         void video.play().catch(() => undefined);
       }
     });
@@ -138,45 +207,75 @@ export class VideoPlayerComponent {
 
   async toggleFullscreen(event: Event) {
     event.stopPropagation();
-    const el = this.containerRef?.nativeElement;
-    if (!el) return;
+    if (this.hasFullscreenElement()) {
+      await this.exitFullscreen();
+      return;
+    }
+    await this.enterFullscreen();
+  }
 
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-      this.isFullscreen.set(false);
+  private hasFullscreenElement(): boolean {
+    const doc = this.document as FullscreenDocument;
+    return !!(this.document.fullscreenElement || doc.webkitFullscreenElement);
+  }
+
+  private async enterFullscreen(): Promise<void> {
+    if (!isPlatformBrowser(this.platformId) || this.hasFullscreenElement()) {
+      this.isFullscreen.set(this.hasFullscreenElement());
       return;
     }
 
-    await el.requestFullscreen();
-    this.isFullscreen.set(true);
-  }
+    const el = this.containerRef?.nativeElement as FullscreenHost | undefined;
+    if (!el) return;
 
-  private youtubeThumbnailUrl(url: string): string | null {
-    const id = this.extractYoutubeVideoId(url);
-    return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
-  }
+    const request =
+      el.requestFullscreen?.bind(el) ??
+      el.webkitRequestFullscreen?.bind(el) ??
+      el.webkitRequestFullScreen?.bind(el);
 
-  private extractYoutubeVideoId(url: string): string | null {
-    try {
-      const u = new URL(url);
-      const host = u.hostname.replace(/^www\./, '');
-
-      if (host === 'youtu.be') {
-        return u.pathname.slice(1).split('/')[0] || null;
+    if (request) {
+      try {
+        await request();
+        this.isFullscreen.set(true);
+        return;
+      } catch {
+        // Fall through to the iOS video API when the element API is blocked.
       }
-
-      if (host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'm.youtube.com') {
-        if (u.pathname.startsWith('/embed/')) {
-          return u.pathname.split('/')[2] || null;
-        }
-        const v = u.searchParams.get('v');
-        if (v) return v;
-        const shortsMatch = u.pathname.match(/^\/shorts\/([^/?]+)/);
-        if (shortsMatch) return shortsMatch[1];
-      }
-    } catch {
-      return null;
     }
-    return null;
+
+    this.tryIosVideoFullscreen();
+  }
+
+  private async exitFullscreen(): Promise<void> {
+    const doc = this.document as FullscreenDocument;
+    const exit =
+      this.document.exitFullscreen?.bind(this.document) ?? doc.webkitExitFullscreen?.bind(doc);
+    if (!exit) return;
+    try {
+      await exit();
+    } catch {
+      // Ignore rejected exits (already left fullscreen).
+    }
+    this.isFullscreen.set(false);
+  }
+
+  private tryIosVideoFullscreen(): void {
+    const video = this.videoEl?.nativeElement as FullscreenVideo | undefined;
+    try {
+      video?.webkitEnterFullscreen?.();
+    } catch {
+      // Safari can reject this outside a gesture; inline playback still works.
+    }
+  }
+
+  private withYoutubeInlineParams(src: string, autoplay: boolean): string {
+    try {
+      const url = new URL(src);
+      url.searchParams.set('playsinline', '1');
+      if (autoplay) url.searchParams.set('autoplay', '1');
+      return url.toString();
+    } catch {
+      return autoplay ? `${src}${src.includes('?') ? '&' : '?'}autoplay=1` : src;
+    }
   }
 }

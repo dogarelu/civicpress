@@ -27,6 +27,22 @@ export class PostsController {
   }
 
   @Public()
+  @Get('most-read')
+  getMostRead() {
+    return this.posts.getMostRead();
+  }
+
+  @Public()
+  @Get('search')
+  search(@Query('q') q = '', @Query('page') page = '1', @Query('perPage') perPage = '15') {
+    return this.posts.search({
+      query: q,
+      page: parseInt(page, 10) || 1,
+      perPage: parseInt(perPage, 10) || 15,
+    });
+  }
+
+  @Public()
   @Get('posts/:slug')
   async getPost(@Param('slug') slug: string) {
     const post = await this.posts.getBySlug(slug);
@@ -35,15 +51,49 @@ export class PostsController {
       ...post,
       modules: layout.modules,
       sidebar: layout.sidebar,
+      mobileModules: layout.mobileModules,
+      articleLayoutMode: layout.articleLayoutMode,
       articleMainTypography: layout.articleMainTypography,
       articleMainShowSummary: layout.articleMainShowSummary,
+      articleMainShowReadingTime: layout.articleMainShowReadingTime,
       articleMainSummaryRows: layout.articleMainSummaryRows,
       articleMainSummaryTypography: layout.articleMainSummaryTypography,
+      articleMainBumbiTypography: layout.articleMainBumbiTypography,
+      articleMainPhotoCaptionTypography: layout.articleMainPhotoCaptionTypography,
       mobileOrder: layout.mobileOrder,
     };
   }
 
+  @Post('admin/posts/preview')
+  previewPost(@Body() body: Record<string, unknown>, @CurrentUser() user: JwtPayload) {
+    return this.posts.preview(body as Parameters<PostsService['preview']>[0], {
+      sub: user.sub,
+      role: user.role,
+    });
+  }
+
+  @Public()
+  @Get('preview/article/:token')
+  getPreview(@Param('token') token: string) {
+    return this.posts.getPreview(token);
+  }
+
   // ─── Admin ─────────────────────────────────────────────────────────────────
+
+  @Get('posts/trash')
+  trashList(
+    @CurrentUser() user: JwtPayload,
+    @Query('page') page = '1',
+    @Query('perPage') perPage = '20',
+    @Query('search') search?: string,
+  ) {
+    return this.posts.trashList({
+      page: parseInt(page, 10),
+      perPage: parseInt(perPage, 10),
+      search,
+      actor: { sub: user.sub, role: user.role },
+    });
+  }
 
   @Get('posts')
   adminList(
@@ -64,6 +114,11 @@ export class PostsController {
     });
   }
 
+  @Get('admin/posts/references')
+  getArticleReferences(@Query('ids') ids = '') {
+    return this.posts.getArticleReferences(ids.split(','));
+  }
+
   @Get('admin/posts/:id')
   getPostAdmin(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.posts.getByIdAdmin(id, { sub: user.sub, role: user.role });
@@ -75,6 +130,21 @@ export class PostsController {
       sub: user.sub,
       role: user.role,
     });
+  }
+
+  @Post('posts/from-video')
+  createPostFromVideo(
+    @Body() body: { title?: string; videoUrl?: string; categoryId?: string },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.posts.createFromVideo(
+      {
+        title: body.title ?? '',
+        videoUrl: body.videoUrl ?? '',
+        categoryId: body.categoryId ?? '',
+      },
+      { sub: user.sub, role: user.role },
+    );
   }
 
   @Patch('posts/:id')
@@ -101,6 +171,18 @@ export class PostsController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.posts.transition(id, body.action, { sub: user.sub, role: user.role }, body.message);
+  }
+
+  @Post('posts/:id/restore')
+  @HttpCode(200)
+  restorePost(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.posts.restore(id, { sub: user.sub, role: user.role });
+  }
+
+  @Delete('posts/:id/permanent')
+  @HttpCode(200)
+  permanentDeletePost(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.posts.permanentDelete(id, { sub: user.sub, role: user.role });
   }
 
   @Delete('posts/:id')

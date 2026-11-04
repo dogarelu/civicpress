@@ -1,3 +1,5 @@
+import type { PostDateFormat } from '@civicpress/shared';
+
 const ROMANIAN_TIME_ZONE = 'Europe/Bucharest';
 
 const dayFormatter = new Intl.DateTimeFormat('ro-RO', {
@@ -24,11 +26,13 @@ function dayKey(date: Date): string {
   return dayFormatter.format(date);
 }
 
-export function formatPostDateForList(dateStr: string | null | undefined): string {
+export function formatPostDateForList(
+  dateStr: string | null | undefined,
+  format: PostDateFormat = 'time-if-today',
+): string {
   if (!dateStr) return '';
   const postDate = new Date(dateStr);
   if (Number.isNaN(postDate.getTime())) return '';
-  return dayKey(postDate) === dayKey(new Date())
-    ? hourFormatter.format(postDate)
-    : dateFormatter.format(postDate);
+  const showTime = format === 'time-if-today' && dayKey(postDate) === dayKey(new Date());
+  return showTime ? hourFormatter.format(postDate) : dateFormatter.format(postDate);
 }

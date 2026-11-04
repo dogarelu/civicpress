@@ -2,11 +2,12 @@ import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type { PublicSettings } from '@civicpress/shared';
+import { SocialLinksComponent } from './social-links.component';
 
 @Component({
   selector: 'cp-site-footer',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, SocialLinksComponent],
   template: `
     <footer class="bg-[#2f2f2f] text-white mt-8">
       <div class="container page-container mx-auto px-3 md:px-4 py-5 md:py-6">
@@ -24,7 +25,9 @@ import type { PublicSettings } from '@civicpress/shared';
             <a routerLink="/cookies" class="text-white/70 hover:text-white transition-colors">
               Politica Cookie
             </a>
+            <a href="/rss.xml" class="text-white/70 hover:text-white transition-colors"> RSS </a>
           </nav>
+          <cp-social-links [settings]="settings" variant="footer" placement="footer" />
           <p class="text-sm text-white/70 shrink-0 sm:text-right">
             &copy; {{ year }} {{ settings?.siteName ?? 'Civicpress' }}. Toate drepturile rezervate.
           </p>

@@ -17,6 +17,8 @@ import { AuditInterceptor } from './modules/audit/audit.interceptor';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PillsModule } from './modules/pills/pills.module';
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { SeoModule } from './modules/seo/seo.module';
 import { JwtAuthGuard } from './common/jwt-auth.guard';
 import { RolesGuard } from './common/roles.guard';
 
@@ -44,6 +46,8 @@ import { RolesGuard } from './common/roles.guard';
     NotificationsModule,
     PillsModule,
     ExchangeRatesModule,
+    AnalyticsModule,
+    SeoModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

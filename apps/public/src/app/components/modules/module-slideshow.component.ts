@@ -1,22 +1,33 @@
 import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import type { ResolvedModule } from '@civicpress/shared';
-import { cleanExcerptText } from '@civicpress/shared';
-import { PostImagePillComponent } from '../post-image-pill.component';
+import type { ResolvedModule, PostDateFormat } from '@civicpress/shared';
+import { CategoryLabelComponent } from '../category-label.component';
+import { PostImagePillsComponent } from '../post-image-pills.component';
+import { PostSubtitleComponent } from '../post-subtitle.component';
 import { PostViewCountComponent } from '../post-view-count.component';
+import { PostReadingTimeComponent } from '../post-reading-time.component';
+import { PostModuleMediaComponent } from '../post-module-media.component';
 import { SiteSettingsService } from '../../services/site-settings.service';
-import { formatPostDateForList } from '../../utils/post-date-display';
 
 /** Module: full-width image slideshow with title and date overlay. */
 @Component({
   selector: 'cp-module-slideshow',
   standalone: true,
-  imports: [CommonModule, RouterModule, PostImagePillComponent, PostViewCountComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    CategoryLabelComponent,
+    PostImagePillsComponent,
+    PostSubtitleComponent,
+    PostViewCountComponent,
+    PostReadingTimeComponent,
+    PostModuleMediaComponent,
+  ],
   template: `
     @if (items.length > 0) {
       <div class="relative overflow-hidden rounded-sm shadow-sm bg-muted">
-        <div class="relative aspect-[16/9] max-h-[440px]">
+        <div class="relative w-full overflow-hidden aspect-[16/9] max-h-[440px]">
           @for (item of items; track item.post.id; let i = $index) {
             <article
               class="absolute inset-0 transition-opacity duration-500"
@@ -24,53 +35,69 @@ import { formatPostDateForList } from '../../utils/post-date-display';
               [class.opacity-0]="i !== activeIndex"
               [class.pointer-events-none]="i !== activeIndex"
             >
-              <a [routerLink]="'/' + item.post.slug" class="block h-full">
-                @if (item.post.heroImage) {
-                  <img
-                    [src]="item.post.heroImage.url"
-                    [alt]="item.post.heroImage.alt ?? item.post.title"
-                    class="w-full h-full object-cover"
-                    [loading]="i === 0 ? 'eager' : 'lazy'"
-                  />
-                } @else {
-                  <div class="w-full h-full bg-gray-200"></div>
-                }
-                <div
-                  class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-4 sm:px-6 py-4 sm:py-6"
+              <cp-post-module-media
+                [post]="item.post"
+                playMode="inline"
+                [active]="i === activeIndex"
+                [eager]="i === 0"
+                (playingChange)="onPlayingChange($event, i)"
+              >
+                <cp-post-image-pills [pills]="item.post.pills" size="lg" />
+              </cp-post-module-media>
+              @if (!(i === activeIndex && slidePlaying)) {
+                <a
+                  [routerLink]="'/' + item.post.slug"
+                  class="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/80 via-black/50 to-transparent px-4 sm:px-6 py-4 sm:py-6"
                 >
                   @if (showCategory && item.post.primaryCategory) {
-                    <span
-                      class="uppercase tracking-wider mb-2 inline-block px-2 py-0.5 rounded-sm bg-white/20 text-white"
-                      style="font-size: var(--module-category-font-size, 12px); font-weight: var(--module-category-font-weight, 700); color: var(--module-category-color, currentColor);"
-                    >
-                      {{ item.post.primaryCategory.name }}
-                    </span>
+                    <cp-category-label
+                      variant="hero"
+                      [onImage]="true"
+                      [link]="false"
+                      [name]="item.post.primaryCategory.name"
+                      [slug]="item.post.primaryCategory.slug"
+                      extraClass="tracking-wider mb-2"
+                    />
                   }
                   <h2
-                    class="font-heading text-white leading-tight line-clamp-3"
+                    class="font-heading text-white leading-tight"
                     style="font-size: var(--hero-title-font-size, 28px); font-weight: var(--hero-title-font-weight, 800); color: var(--hero-title-color, currentColor);"
                   >
                     {{ item.post.title }}
                   </h2>
-                  @if (showSummary && item.post.excerpt) {
-                    <p
-                      class="mt-2 news-summary-clamp text-white/85"
-                      style="font-size: var(--news-summary-font-size, 14px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, currentColor);"
-                    >
-                      {{ cleanExcerpt(item.post) }}
-                    </p>
-                  }
-                  @if (canShowDate(item, item.post) || canShowViews(item.post)) {
+                  <cp-post-subtitle
+                    [show]="showSummary"
+                    [showBumbi]="showBumbi"
+                    [bulbi]="item.post.bulbi ?? []"
+                    [excerpt]="item.post.excerpt"
+                    variant="hero"
+                    listClass="mt-2 text-white/85"
+                    textClass="mt-2 text-white/85"
+                  />
+                  @if (
+                    canShowDate(item, item.post) ||
+                    canShowReadingTime(item.post) ||
+                    canShowViews(item.post)
+                  ) {
                     <div
                       class="mt-2 text-white/85 flex items-center gap-2"
-                      style="font-size: var(--module-meta-font-size, 14px); font-weight: var(--module-meta-font-weight, 400); color: var(--module-meta-color, currentColor);"
+                      style="font-size: var(--hero-meta-font-size, var(--module-meta-font-size, 14px)); font-weight: var(--hero-meta-font-weight, var(--module-meta-font-weight, 400)); color: var(--hero-meta-color, var(--module-meta-color, currentColor));"
                     >
                       @if (canShowDate(item, item.post)) {
                         <time [dateTime]="item.post.publishedAt">
                           {{ formatDate(item.post.publishedAt) }}
                         </time>
                       }
-                      @if (canShowDate(item, item.post) && canShowViews(item.post)) {
+                      @if (canShowDate(item, item.post) && canShowReadingTime(item.post)) {
+                        <span>•</span>
+                      }
+                      @if (canShowReadingTime(item.post)) {
+                        <cp-post-reading-time [seconds]="item.post.readingTimeSeconds!" />
+                      }
+                      @if (
+                        (canShowDate(item, item.post) || canShowReadingTime(item.post)) &&
+                        canShowViews(item.post)
+                      ) {
                         <span>•</span>
                       }
                       @if (canShowViews(item.post)) {
@@ -78,11 +105,8 @@ import { formatPostDateForList } from '../../utils/post-date-display';
                       }
                     </div>
                   }
-                </div>
-              </a>
-              <div class="absolute top-3 right-3 z-10 flex flex-col items-end gap-2">
-                <cp-post-image-pill [pill]="item.post.pill" size="lg" [floating]="false" />
-              </div>
+                </a>
+              }
             </article>
           }
         </div>
@@ -91,7 +115,7 @@ import { formatPostDateForList } from '../../utils/post-date-display';
           <button
             type="button"
             (click)="prev()"
-            class="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
+            class="absolute left-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
             aria-label="Slide anterior"
           >
             ‹
@@ -99,7 +123,7 @@ import { formatPostDateForList } from '../../utils/post-date-display';
           <button
             type="button"
             (click)="next()"
-            class="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
+            class="absolute right-3 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-black/45 text-white hover:bg-black/65 transition-colors"
             aria-label="Slide următor"
           >
             ›
@@ -128,24 +152,31 @@ export class ModuleSlideshowComponent {
   @Input() showCategory = false;
   /** Show excerpt text in the slide overlay. */
   @Input() showSummary = true;
+  @Input() showBumbi: boolean | null = null;
+  @Input() dateFormat: PostDateFormat | null = null;
+  @Input() showReadingTime = false;
 
   activeIndex = 0;
+  slidePlaying = false;
 
-  cleanExcerpt(post: ResolvedModule['posts'][number]['post']): string {
-    return cleanExcerptText(post.excerpt);
+  onPlayingChange(playing: boolean, index: number): void {
+    if (index === this.activeIndex) this.slidePlaying = playing;
   }
 
   prev() {
     if (this.items.length === 0) return;
+    this.slidePlaying = false;
     this.activeIndex = (this.activeIndex - 1 + this.items.length) % this.items.length;
   }
 
   next() {
     if (this.items.length === 0) return;
+    this.slidePlaying = false;
     this.activeIndex = (this.activeIndex + 1) % this.items.length;
   }
 
   goTo(index: number) {
+    this.slidePlaying = false;
     this.activeIndex = index;
   }
 
@@ -160,7 +191,11 @@ export class ModuleSlideshowComponent {
     return this.siteSettings.canShowViews(post);
   }
 
+  canShowReadingTime(post: ResolvedModule['posts'][number]['post']): boolean {
+    return this.showReadingTime && (post.readingTimeSeconds ?? 0) > 0;
+  }
+
   formatDate(dateStr: string | null): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr, this.dateFormat);
   }
 }

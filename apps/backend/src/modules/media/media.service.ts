@@ -19,11 +19,20 @@ const STORAGE_DIR = process.env.MEDIA_STORAGE_DIR
   : path.resolve(process.cwd(), 'storage/media');
 const ORIG_DIR = path.join(STORAGE_DIR, 'orig');
 const CACHE_DIR = path.join(STORAGE_DIR, 'cache');
-const MAX_SIZE = 10 * 1024 * 1024; // 10MB for images
-const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB for video
+export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB for images
+/** Must stay in sync with Fastify multipart `fileSize` / `bodyLimit` in main.ts. */
+export const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB for video
 
 const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const ALLOWED_VIDEO_MIMES = new Set(['video/mp4']);
+/** MP4-family types: phones/export tools often label .mp4 as QuickTime or generic MP4. */
+const ALLOWED_VIDEO_MIMES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/x-m4v',
+  'video/3gpp',
+  'application/mp4',
+  'audio/mp4',
+]);
 
 const VARIANT_WIDTHS: Record<string, number> = {
   '45': 45,
@@ -111,12 +120,21 @@ export class MediaService {
 
     const chunks: Buffer[] = [];
     let totalSize = 0;
-    for await (const chunk of fileData.file) {
-      totalSize += (chunk as Buffer).length;
-      if (totalSize > MAX_VIDEO_SIZE) {
+    try {
+      for await (const chunk of fileData.file) {
+        totalSize += (chunk as Buffer).length;
+        if (totalSize > MAX_VIDEO_SIZE) {
+          throw new BadRequestException(`File too large (max ${MAX_VIDEO_SIZE / 1024 / 1024}MB)`);
+        }
+        chunks.push(chunk as Buffer);
+      }
+    } catch (err) {
+      if (err instanceof BadRequestException) throw err;
+      const code = (err as { code?: string } | null)?.code;
+      if (code === 'FST_REQ_FILE_TOO_LARGE') {
         throw new BadRequestException(`File too large (max ${MAX_VIDEO_SIZE / 1024 / 1024}MB)`);
       }
-      chunks.push(chunk as Buffer);
+      throw new BadRequestException('Failed to read uploaded file');
     }
     const buffer = Buffer.concat(chunks);
 
@@ -128,14 +146,19 @@ export class MediaService {
     }
     const detected = await _fileTypeFromBuffer!(buffer);
     const mimeType = detected?.mime || fileData.mimetype;
-    const isVideo = ALLOWED_VIDEO_MIMES.has(mimeType);
+    const hasIsoBmffFtyp =
+      buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp';
+    const videoName = fileData.filename.toLowerCase();
+    const isVideoName =
+      videoName.endsWith('.mp4') || videoName.endsWith('.m4v') || videoName.endsWith('.mov');
+    const isVideo = ALLOWED_VIDEO_MIMES.has(mimeType) || (hasIsoBmffFtyp && isVideoName);
     const isImage = ALLOWED_MIMES.has(mimeType);
 
     if (!isImage && !isVideo) {
       throw new BadRequestException(`File type not allowed: ${mimeType}`);
     }
 
-    const maxAllowed = isVideo ? MAX_VIDEO_SIZE : MAX_SIZE;
+    const maxAllowed = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
     if (buffer.length > maxAllowed) {
       throw new BadRequestException(`File too large (max ${maxAllowed / 1024 / 1024}MB)`);
     }
@@ -143,7 +166,7 @@ export class MediaService {
     ensureDir(ORIG_DIR);
     ensureDir(CACHE_DIR);
 
-    const ext = detected?.ext || (isVideo ? 'mp4' : 'jpg');
+    const ext = isVideo ? 'mp4' : detected?.ext || 'jpg';
     const id = randomBytes(12).toString('hex');
     const filename = `${id}.${ext}`;
     const origPath = path.join(ORIG_DIR, filename);
@@ -176,7 +199,7 @@ export class MediaService {
     const media = await this.prisma.media.create({
       data: {
         filename,
-        mimeType,
+        mimeType: isVideo ? 'video/mp4' : mimeType,
         width,
         height,
         sizeBytes: buffer.length,

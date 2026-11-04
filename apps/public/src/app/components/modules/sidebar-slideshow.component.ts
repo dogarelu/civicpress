@@ -2,20 +2,30 @@ import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import type {
+  PostDateFormat,
   LayoutDisplaySlot,
   PostSummary,
   SidebarSlideshowTextPosition,
 } from '@civicpress/shared';
-import { cleanExcerptText } from '@civicpress/shared';
-import { PostImagePillComponent } from '../post-image-pill.component';
+import { PostImagePillsComponent } from '../post-image-pills.component';
+import { PostSubtitleComponent } from '../post-subtitle.component';
 import { PostViewCountComponent } from '../post-view-count.component';
+import { PostReadingTimeComponent } from '../post-reading-time.component';
+import { PostModuleMediaComponent } from '../post-module-media.component';
 import { SiteSettingsService } from '../../services/site-settings.service';
-import { formatPostDateForList } from '../../utils/post-date-display';
 
 @Component({
   selector: 'cp-sidebar-slideshow',
   standalone: true,
-  imports: [CommonModule, RouterModule, PostImagePillComponent, PostViewCountComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    PostImagePillsComponent,
+    PostSubtitleComponent,
+    PostViewCountComponent,
+    PostReadingTimeComponent,
+    PostModuleMediaComponent,
+  ],
   template: `
     @if (normalizedItems.length > 0) {
       <aside class="bg-white border border-border rounded-sm shadow-sm overflow-hidden">
@@ -28,53 +38,55 @@ import { formatPostDateForList } from '../../utils/post-date-display';
                 [class.opacity-0]="i !== activeIndex"
                 [class.pointer-events-none]="i !== activeIndex"
               >
-                <a [routerLink]="'/' + item.post.slug" class="block h-full relative">
-                  @if (item.post.heroImage) {
-                    <img
-                      [src]="item.post.heroImage.url"
-                      [alt]="item.post.heroImage.alt ?? item.post.title"
-                      class="w-full h-full object-cover"
-                      [loading]="i === 0 ? 'eager' : 'lazy'"
-                    />
-                  } @else {
-                    <div class="w-full h-full bg-gray-200"></div>
-                  }
-
-                  @if (textPosition === 'on-image') {
-                    <div
-                      class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent px-3 py-3"
+                <cp-post-module-media
+                  [post]="item.post"
+                  playMode="inline"
+                  [active]="i === activeIndex"
+                  [eager]="i === 0"
+                  (playingChange)="onPlayingChange($event, i)"
+                >
+                  <cp-post-image-pills [pills]="item.post.pills" size="sm" />
+                </cp-post-module-media>
+                @if (textPosition === 'on-image' && !(i === activeIndex && slidePlaying)) {
+                  <a
+                    [routerLink]="'/' + item.post.slug"
+                    class="absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/95 via-black/80 to-transparent px-3 py-3"
+                  >
+                    <h4
+                      class="text-white leading-tight"
+                      style="font-size: var(--sidebar-title-font-size, 13px); font-weight: var(--sidebar-title-font-weight, 600); color: var(--sidebar-title-color, currentColor);"
                     >
-                      <h4
-                        class="text-white leading-tight line-clamp-3"
-                        style="font-size: var(--sidebar-title-font-size, 13px); font-weight: var(--sidebar-title-font-weight, 600); color: var(--sidebar-title-color, currentColor);"
+                      {{ item.post.title }}
+                    </h4>
+                    @if (canShowMeta(item, item.post)) {
+                      <div
+                        class="mt-1.5 text-white/90"
+                        style="font-size: var(--module-meta-font-size, 11px); font-weight: var(--module-meta-font-weight, 400); color: var(--module-meta-color, currentColor);"
                       >
-                        {{ item.post.title }}
-                      </h4>
-                      @if (canShowMeta(item, item.post)) {
-                        <div
-                          class="mt-1.5 text-white/90"
-                          style="font-size: var(--module-meta-font-size, 11px); font-weight: var(--module-meta-font-weight, 400); color: var(--module-meta-color, currentColor);"
-                        >
-                          @if (canShowDate(item, item.post)) {
-                            <time [dateTime]="item.post.publishedAt">
-                              {{ formatDate(item.post.publishedAt) }}
-                            </time>
-                          }
-                          @if (canShowDate(item, item.post) && canShowViews(item.post)) {
-                            <span class="mx-1 text-white/70">•</span>
-                          }
-                          @if (canShowViews(item.post)) {
-                            <cp-post-view-count [count]="item.post.viewCount!" />
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
-                </a>
-
-                <div class="absolute top-2 right-2 z-10 flex flex-col items-end gap-1.5">
-                  <cp-post-image-pill [pill]="item.post.pill" size="sm" [floating]="false" />
-                </div>
+                        @if (canShowDate(item, item.post)) {
+                          <time [dateTime]="item.post.publishedAt">
+                            {{ formatDate(item.post.publishedAt) }}
+                          </time>
+                        }
+                        @if (canShowDate(item, item.post) && canShowReadingTime(item.post)) {
+                          <span class="mx-1 text-white/70">•</span>
+                        }
+                        @if (canShowReadingTime(item.post)) {
+                          <cp-post-reading-time [seconds]="item.post.readingTimeSeconds!" />
+                        }
+                        @if (
+                          (canShowDate(item, item.post) || canShowReadingTime(item.post)) &&
+                          canShowViews(item.post)
+                        ) {
+                          <span class="mx-1 text-white/70">•</span>
+                        }
+                        @if (canShowViews(item.post)) {
+                          <cp-post-view-count [count]="item.post.viewCount!" />
+                        }
+                      </div>
+                    }
+                  </a>
+                }
               </article>
             }
           </div>
@@ -84,7 +96,7 @@ import { formatPostDateForList } from '../../utils/post-date-display';
             @if (item) {
               <div class="px-3 py-3 border-t border-black/40 bg-black/90">
                 <h4
-                  class="leading-tight line-clamp-3 text-white"
+                  class="leading-tight text-white"
                   style="font-size: var(--sidebar-title-font-size, 13px); font-weight: var(--sidebar-title-font-weight, 600); color: var(--sidebar-title-color, #ffffff);"
                 >
                   <a
@@ -94,14 +106,14 @@ import { formatPostDateForList } from '../../utils/post-date-display';
                     {{ item.post.title }}
                   </a>
                 </h4>
-                @if (showSummary && item.post.excerpt) {
-                  <p
-                    class="mt-1 news-summary-clamp text-white/85"
-                    style="font-size: var(--news-summary-font-size, 12px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, rgba(255,255,255,0.85));"
-                  >
-                    {{ cleanExcerpt(item.post) }}
-                  </p>
-                }
+                <cp-post-subtitle
+                  [show]="showSummary"
+                  [showBumbi]="showBumbi"
+                  [bulbi]="item.post.bulbi ?? []"
+                  [excerpt]="item.post.excerpt"
+                  listClass="mt-1 text-white/85"
+                  textClass="mt-1 text-white/85"
+                />
                 @if (canShowMeta(item, item.post)) {
                   <div
                     class="mt-1.5 text-white/85"
@@ -112,7 +124,16 @@ import { formatPostDateForList } from '../../utils/post-date-display';
                         formatDate(item.post.publishedAt)
                       }}</time>
                     }
-                    @if (canShowDate(item, item.post) && canShowViews(item.post)) {
+                    @if (canShowDate(item, item.post) && canShowReadingTime(item.post)) {
+                      <span class="mx-1 text-white/60">•</span>
+                    }
+                    @if (canShowReadingTime(item.post)) {
+                      <cp-post-reading-time [seconds]="item.post.readingTimeSeconds!" />
+                    }
+                    @if (
+                      (canShowDate(item, item.post) || canShowReadingTime(item.post)) &&
+                      canShowViews(item.post)
+                    ) {
                       <span class="mx-1 text-white/60">•</span>
                     }
                     @if (canShowViews(item.post)) {
@@ -165,11 +186,15 @@ export class SidebarSlideshowComponent {
   @Input() displaySlots: LayoutDisplaySlot[] = [];
   @Input() textPosition: SidebarSlideshowTextPosition = 'on-image';
   @Input() showSummary = true;
+  @Input() showBumbi: boolean | null = null;
+  @Input() dateFormat: PostDateFormat | null = null;
+  @Input() showReadingTime = false;
 
   activeIndex = 0;
+  slidePlaying = false;
 
-  cleanExcerpt(post: PostSummary): string {
-    return cleanExcerptText(post.excerpt);
+  onPlayingChange(playing: boolean, index: number): void {
+    if (index === this.activeIndex) this.slidePlaying = playing;
   }
 
   get normalizedItems(): Array<{ post: PostSummary; showDate: boolean; showAuthor: boolean }> {
@@ -182,16 +207,19 @@ export class SidebarSlideshowComponent {
 
   prev() {
     if (this.normalizedItems.length === 0) return;
+    this.slidePlaying = false;
     this.activeIndex =
       (this.activeIndex - 1 + this.normalizedItems.length) % this.normalizedItems.length;
   }
 
   next() {
     if (this.normalizedItems.length === 0) return;
+    this.slidePlaying = false;
     this.activeIndex = (this.activeIndex + 1) % this.normalizedItems.length;
   }
 
   goTo(index: number) {
+    this.slidePlaying = false;
     this.activeIndex = index;
   }
 
@@ -203,11 +231,15 @@ export class SidebarSlideshowComponent {
     return this.siteSettings.canShowViews(post);
   }
 
+  canShowReadingTime(post: PostSummary): boolean {
+    return this.showReadingTime && (post.readingTimeSeconds ?? 0) > 0;
+  }
+
   canShowMeta(item: { showDate: boolean }, post: PostSummary): boolean {
-    return this.canShowDate(item, post) || this.canShowViews(post);
+    return this.canShowDate(item, post) || this.canShowReadingTime(post) || this.canShowViews(post);
   }
 
   formatDate(dateStr: string | null): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr, this.dateFormat);
   }
 }

@@ -1,14 +1,9 @@
 import type { MobileLayoutUnit, PageLayoutConfig, SidebarBlockEntry } from './schemas.js';
-import {
-  isSidebarSingleCategoryEntry,
-  isSidebarSlideshowEntry,
-  sidebarBlockMode,
-} from './sidebar-block-utils.js';
+import { isSidebarMultiInstanceEntry, sidebarBlockMode } from './sidebar-block-utils.js';
 
 /** Stable ref for a sidebar block entry (used in mobileOrder). */
 export function sidebarBlockRef(entry: SidebarBlockEntry): string {
-  if (isSidebarSingleCategoryEntry(entry)) return entry.id;
-  if (isSidebarSlideshowEntry(entry)) return entry.id;
+  if (isSidebarMultiInstanceEntry(entry)) return entry.id;
   return sidebarBlockMode(entry);
 }
 
@@ -18,10 +13,13 @@ function unitKey(unit: MobileLayoutUnit): string {
 
 /** Default mobile order: all main modules, then all sidebar blocks (web order). */
 export function buildDefaultMobileOrder(config: PageLayoutConfig): MobileLayoutUnit[] {
-  const units: MobileLayoutUnit[] = config.modules.map((mod) => ({
-    kind: 'module',
-    ref: mod.id,
-  }));
+  const units: MobileLayoutUnit[] = config.modules
+    // Desktop-only modules stay out of the mobile order list.
+    .filter((mod) => mod.type !== 'video-list')
+    .map((mod) => ({
+      kind: 'module',
+      ref: mod.id,
+    }));
   if (config.sidebar.enabled) {
     for (const block of config.sidebar.blocks) {
       units.push({ kind: 'sidebar', ref: sidebarBlockRef(block) });

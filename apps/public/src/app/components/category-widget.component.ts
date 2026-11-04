@@ -1,35 +1,49 @@
 import { Component, Input, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import type { CategoryStrip, LayoutDisplaySlot } from '@civicpress/shared';
-import { cleanExcerptText } from '@civicpress/shared';
-import { PostImagePillComponent } from './post-image-pill.component';
+import {
+  normalizeCategoryColor,
+  type CategoryStrip,
+  type LayoutDisplaySlot,
+  type PostDateFormat,
+} from '@civicpress/shared';
+import { PostImagePillsComponent } from './post-image-pills.component';
+import { PostSubtitleComponent } from './post-subtitle.component';
 import { PostViewCountComponent } from './post-view-count.component';
+import { PostReadingTimeComponent } from './post-reading-time.component';
 import { SiteSettingsService } from '../services/site-settings.service';
-import { formatPostDateForList } from '../utils/post-date-display';
 
 @Component({
   selector: 'cp-category-widget',
   standalone: true,
-  imports: [CommonModule, RouterModule, PostImagePillComponent, PostViewCountComponent],
+  imports: [
+    CommonModule,
+    RouterModule,
+    PostImagePillsComponent,
+    PostSubtitleComponent,
+    PostViewCountComponent,
+    PostReadingTimeComponent,
+  ],
   template: `
     @if (strip) {
       <aside class="bg-white border border-border rounded-sm shadow-sm overflow-hidden">
         <header
-          class="px-3 py-2 flex items-center justify-between bg-gray-100 border-b border-border"
+          class="relative px-3 py-2 text-center cp-row-header-bar border-b border-border"
+          [style.--category-color]="stripCategoryColor"
         >
           <a
             [routerLink]="['/category', strip.category.slug]"
-            class="text-gray-800 text-xs font-bold uppercase tracking-wider hover:text-gray-900 transition-colors"
+            class="uppercase tracking-wider hover:opacity-80 transition-opacity"
+            style="font-size: var(--row-header-font-size, 12px); font-weight: var(--row-header-font-weight, 700); color: var(--row-header-color, #1f2937);"
             >{{ strip.category.name }}</a
           >
           <a
             [routerLink]="['/category', strip.category.slug]"
-            class="text-gray-500 text-[10px] hover:text-gray-700 transition-colors uppercase tracking-wide"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-[10px] hover:text-gray-700 transition-colors uppercase tracking-wide"
             >Mai mult »</a
           >
         </header>
-        <ul class="divide-y divide-border">
+        <ul class="divide-y divide-gray-400">
           @for (post of strip.posts.slice(0, maxPosts); track post.id; let i = $index) {
             <li class="hover:bg-muted transition-colors">
               <article class="p-3 group">
@@ -46,29 +60,6 @@ import { formatPostDateForList } from '../utils/post-date-display';
                         {{ post.title }}
                       </a>
                     </h4>
-                    @if (canShowMeta(i, post)) {
-                      <div class="text-[10px] text-gray-400 mt-1">
-                        @if (canShowDate(i, post)) {
-                          <time [dateTime]="post.publishedAt">{{
-                            formatDate(post.publishedAt)
-                          }}</time>
-                        }
-                        @if (
-                          canShowDate(i, post) && (canShowAuthor(i, post) || canShowViews(post))
-                        ) {
-                          <span class="mx-1 text-gray-300">•</span>
-                        }
-                        @if (canShowAuthor(i, post) && displayAuthor(post); as authorName) {
-                          <span>{{ authorName }}</span>
-                        }
-                        @if (canShowAuthor(i, post) && canShowViews(post)) {
-                          <span class="mx-1 text-gray-300">•</span>
-                        }
-                        @if (canShowViews(post)) {
-                          <cp-post-view-count [count]="post.viewCount!" />
-                        }
-                      </div>
-                    }
                   </div>
                   @if (post.heroImage) {
                     <a [routerLink]="'/' + post.slug" class="flex-shrink-0">
@@ -81,18 +72,46 @@ import { formatPostDateForList } from '../utils/post-date-display';
                           width="72"
                           height="54"
                         />
-                        <cp-post-image-pill [pill]="post.pill" size="sm" />
+                        <cp-post-image-pills [pills]="post.pills" size="sm" />
                       </div>
                     </a>
                   }
                 </div>
-                @if (showSummary && post.excerpt) {
-                  <p
-                    class="mt-1 news-summary-clamp text-gray-600"
-                    style="font-size: var(--news-summary-font-size, 12px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, currentColor);"
-                  >
-                    {{ cleanExcerpt(post) }}
-                  </p>
+                <cp-post-subtitle
+                  [show]="showSummary"
+                  [showBumbi]="showBumbi"
+                  [bulbi]="post.bulbi ?? []"
+                  [excerpt]="post.excerpt"
+                  listClass="mt-1 text-gray-600"
+                  textClass="mt-1 text-gray-600"
+                />
+                @if (canShowMeta(i, post)) {
+                  <div class="text-[10px] text-gray-400 mt-1">
+                    @if (canShowDate(i, post)) {
+                      <time [dateTime]="post.publishedAt">{{ formatDate(post.publishedAt) }}</time>
+                    }
+                    @if (canShowDate(i, post) && canShowReadingTime(post)) {
+                      <span class="mx-1 text-gray-300">•</span>
+                    }
+                    @if (canShowReadingTime(post)) {
+                      <cp-post-reading-time [seconds]="post.readingTimeSeconds!" />
+                    }
+                    @if (
+                      (canShowDate(i, post) || canShowReadingTime(post)) &&
+                      (canShowAuthor(i, post) || canShowViews(post))
+                    ) {
+                      <span class="mx-1 text-gray-300">•</span>
+                    }
+                    @if (canShowAuthor(i, post) && displayAuthor(post); as authorName) {
+                      <span>{{ authorName }}</span>
+                    }
+                    @if (canShowAuthor(i, post) && canShowViews(post)) {
+                      <span class="mx-1 text-gray-300">•</span>
+                    }
+                    @if (canShowViews(post)) {
+                      <cp-post-view-count [count]="post.viewCount!" />
+                    }
+                  </div>
                 }
               </article>
             </li>
@@ -110,9 +129,13 @@ export class CategoryWidgetComponent {
   /** Max posts to show; defaults to 4 for multi-category sidebar strips. */
   @Input() maxPosts = 4;
   @Input() showSummary = true;
+  @Input() showBumbi: boolean | null = null;
+  /** Per-module date format override. Null = inherit site setting. */
+  @Input() dateFormat: PostDateFormat | null = null;
+  @Input() showReadingTime = false;
 
-  cleanExcerpt(post: CategoryStrip['posts'][number]): string {
-    return cleanExcerptText(post.excerpt);
+  get stripCategoryColor(): string | null {
+    return normalizeCategoryColor(this.strip?.category.color) ?? null;
   }
 
   displayAuthor(post: CategoryStrip['posts'][number]): string | null {
@@ -131,9 +154,16 @@ export class CategoryWidgetComponent {
     return this.siteSettings.canShowViews(post);
   }
 
+  canShowReadingTime(post: CategoryStrip['posts'][number]): boolean {
+    return this.showReadingTime && (post.readingTimeSeconds ?? 0) > 0;
+  }
+
   canShowMeta(index: number, post: CategoryStrip['posts'][number]): boolean {
     return (
-      this.canShowAuthor(index, post) || this.canShowDate(index, post) || this.canShowViews(post)
+      this.canShowAuthor(index, post) ||
+      this.canShowDate(index, post) ||
+      this.canShowReadingTime(post) ||
+      this.canShowViews(post)
     );
   }
 
@@ -146,6 +176,6 @@ export class CategoryWidgetComponent {
   }
 
   formatDate(dateStr: string): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr, this.dateFormat);
   }
 }

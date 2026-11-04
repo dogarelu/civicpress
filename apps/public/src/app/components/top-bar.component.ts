@@ -17,7 +17,7 @@ import { AdminSessionService } from '../services/admin-session.service';
           }
         </span>
         <div class="flex items-center gap-3">
-          @if (isAdmin()) {
+          @if (canEditPosts()) {
             <a
               href="/admin/"
               class="inline-flex items-center rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-700 hover:bg-gray-100 transition-colors"
@@ -103,6 +103,7 @@ export class TopBarComponent implements OnInit, OnDestroy {
   private adminSession = inject(AdminSessionService);
   private timer: ReturnType<typeof setInterval> | null = null;
   isAdmin = this.adminSession.isAdmin;
+  canEditPosts = this.adminSession.canEditPosts;
 
   ngOnInit() {
     this.todayStr = new Intl.DateTimeFormat('ro-RO', {

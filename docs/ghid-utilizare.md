@@ -28,34 +28,37 @@ Interfața panoului este integral în limba română și se accesează la adresa
 
 ## 1. Roluri și permisiuni
 
-Există trei roluri, fiecare cu un nivel diferit de acces:
+Există patru roluri, fiecare cu un nivel diferit de acces:
 
-| Rol        | Etichetă în interfață | Ce poate face                                                                                                                                   |
-| ---------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **AUTHOR** | Autor                 | Scrie propriile articole și le trimite spre revizie. Vede și editează doar articolele proprii.                                                  |
-| **EDITOR** | Editor                | Tot ce poate un autor, plus: revizuiește/publică orice articol, gestionează categorii, pill-uri și aspectul paginilor, vede setările site-ului. |
-| **ADMIN**  | Admin                 | Tot ce poate un editor, plus: administrează utilizatorii și salvează setările globale ale site-ului.                                            |
+| Rol              | Etichetă în interfață | Ce poate face                                                                                                                                                                             |
+| ---------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AUTHOR**       | Autor                 | Scrie propriile articole și le trimite spre revizie. Vede și editează doar articolele proprii.                                                                                            |
+| **EDITOR**       | Editor                | Tot ce poate un autor, plus: revizuiește/publică orice articol, gestionează categorii, pill-uri și aspectul paginilor, vede setările site-ului.                                           |
+| **CHIEF_EDITOR** | Editor șef            | Publică, editează (inclusiv articole deja publicate) și șterge articole ca un admin; gestionează pill-uri și vede analiza. Nu are acces la setări, layout-uri, categorii sau utilizatori. |
+| **ADMIN**        | Admin                 | Acces complet: articole, categorii, pill-uri, layout-uri, analiză, utilizatori și setările globale ale site-ului.                                                                         |
 
 Reguli utile de reținut:
 
 - Un **autor** vede în liste doar articolele lui și le poate edita doar cât timp sunt în stările „Ciornă" sau „În revizie".
-- Un **editor** nu poate edita direct un articol deja „Publicat" — trebuie mai întâi să-l arhiveze (sau să ceară unui admin).
-- Un **admin** poate edita și articolele publicate.
+- Un **editor** nu poate edita direct un articol deja „Publicat" — trebuie mai întâi să-l arhiveze (sau să ceară unui editor șef / admin).
+- Un **editor șef** și un **admin** pot edita și articolele publicate.
 
 Matrice rapidă de acces:
 
-| Funcție                                         | Autor | Editor | Admin |
-| ----------------------------------------------- | :---: | :----: | :---: |
-| Panou de bord, articole proprii, jurnal propriu |   ✓   |   ✓    |   ✓   |
-| Trimite propriile ciorne spre revizie           |   ✓   |   ✓    |   ✓   |
-| Publică / aprobă / respinge / arhivează         |       |   ✓    |   ✓   |
-| Categorii, pill-uri, aspect pagini              |       |   ✓    |   ✓   |
-| Setări site (vizualizare)                       |       |   ✓    |   ✓   |
-| Setări site (salvare)                           |       |        |   ✓   |
-| Utilizatori                                     |       |        |   ✓   |
-| Preferințe notificări (personale)               |   ✓   |   ✓    |   ✓   |
-| Abonare la alerte de revizie                    |       |   ✓    |   ✓   |
-| Editare articole deja publicate                 |       |        |   ✓   |
+| Funcție                                         | Autor | Editor | Editor șef | Admin |
+| ----------------------------------------------- | :---: | :----: | :--------: | :---: |
+| Panou de bord, articole proprii, jurnal propriu |   ✓   |   ✓    |     ✓      |   ✓   |
+| Trimite propriile ciorne spre revizie           |   ✓   |   ✓    |     ✓      |   ✓   |
+| Publică / aprobă / respinge / arhivează         |       |   ✓    |     ✓      |   ✓   |
+| Editare articole deja publicate                 |       |        |     ✓      |   ✓   |
+| Pill-uri                                        |       |   ✓    |     ✓      |   ✓   |
+| Analiză                                         |       |        |     ✓      |   ✓   |
+| Categorii, aspect pagini                        |       |   ✓    |            |   ✓   |
+| Setări site (vizualizare)                       |       |   ✓    |            |   ✓   |
+| Setări site (salvare)                           |       |        |            |   ✓   |
+| Utilizatori                                     |       |        |            |   ✓   |
+| Preferințe notificări (personale)               |   ✓   |   ✓    |     ✓      |   ✓   |
+| Abonare la alerte de revizie                    |       |   ✓    |     ✓      |   ✓   |
 
 ---
 
@@ -82,17 +85,18 @@ Detalii despre sesiune:
 
 După autentificare, în stânga apare meniul de navigație. Elementele afișate depind de rolul tău:
 
-| Element de meniu  | Destinație           | Vizibil pentru |
-| ----------------- | -------------------- | -------------- |
-| Dashboard         | Panoul de bord       | Toți           |
-| Articole          | Lista de articole    | Toți           |
-| Categorii         | Gestionare categorii | Editor / Admin |
-| Pill-uri          | Etichete pe imagini  | Editor / Admin |
-| Aspect pagini     | Configurare layout   | Editor / Admin |
-| Utilizatori       | Administrare conturi | Doar Admin     |
-| Jurnal activitate | Istoric acțiuni      | Toți           |
-| Setări            | Setările site-ului   | Editor / Admin |
-| Notificări        | Preferințe personale | Toți           |
+| Element de meniu  | Destinație           | Vizibil pentru              |
+| ----------------- | -------------------- | --------------------------- |
+| Dashboard         | Panoul de bord       | Toți                        |
+| Analiză           | Statistici trafic    | Editor șef / Admin          |
+| Articole          | Lista de articole    | Toți                        |
+| Categorii         | Gestionare categorii | Editor / Admin              |
+| Pill-uri          | Etichete pe imagini  | Editor / Editor șef / Admin |
+| Aspect pagini     | Configurare layout   | Editor / Admin              |
+| Utilizatori       | Administrare conturi | Doar Admin                  |
+| Jurnal activitate | Istoric acțiuni      | Toți                        |
+| Setări            | Setările site-ului   | Editor / Admin              |
+| Notificări        | Preferințe personale | Toți                        |
 
 În partea de sus a panoului există un link către site-ul public (se deschide într-o filă nouă).
 
@@ -234,7 +238,9 @@ Acțiunile și cine le poate face:
 | Arhivează | „Arhivează"                        | Publicat   | Editor+                       | → Arhivat                       |
 | Republică | „Republică"                        | Arhivat    | Editor+                       | → Publicat                      |
 
-**Efect la trimiterea spre revizie:** editorii și adminii care și-au activat notificările primesc automat o alertă (email și/sau Signal) atunci când un autor trimite un articol.
+„Editor+" = Editor, Editor șef și Admin.
+
+**Efect la trimiterea spre revizie:** editorii, editorii șefi și adminii care și-au activat notificările primesc automat o alertă (email și/sau Signal) atunci când un autor trimite un articol.
 
 ---
 
@@ -250,10 +256,12 @@ Pagina `/categories` (Editor / Admin).
 - **Nume** (obligatoriu)
 - **Slug** (opțional, generat automat din nume)
 - **Categorie părinte** (pentru a crea o subcategorie)
-- **Afișează în meniu** (dacă apare în navigația site-ului)
+- **Afișează în meniul web** (dacă apare în navigația desktop)
+- **Afișează în meniul burger** (dacă apare în meniul deschis din pictograma hamburger, pe telefon; independent de meniul web)
+- **Afișează în rândul de categorii** (dacă apare în bara orizontală de sub antet, pe telefon; independent de meniul burger)
 - **Descriere**
 
-Fiecare rând din listă arată: mânerul de tragere, numele și slug-ul, numărul de articole, dacă e în meniu sau ascunsă, dacă e subcategorie, plus pictogramele de editare și ștergere.
+Fiecare rând din listă arată: mânerul de tragere, numele și slug-ul, numărul de articole, dacă e în meniul web, în meniul burger și în rândul mobil, dacă e subcategorie, plus pictogramele de editare și ștergere.
 
 Reguli importante:
 
@@ -267,7 +275,7 @@ Reguli importante:
 
 ## 8. Pill-uri (etichete pe imagini)
 
-Pagina `/pills` (Editor / Admin). Pill-urile sunt etichete colorate afișate peste imaginea principală a articolelor (colțul din dreapta sus, pe site-ul public).
+Pagina `/pills` (Editor / Editor șef / Admin). Pill-urile sunt etichete colorate afișate peste imaginea principală a articolelor (colțul din dreapta sus, pe site-ul public).
 
 **Creare pill:**
 
@@ -300,49 +308,64 @@ Trei file (tab-uri):
 
 **Tipuri de module disponibile:**
 
-| Etichetă                               | Descriere                                                |
-| -------------------------------------- | -------------------------------------------------------- |
-| 1 articol principal                    | Un singur articol evidențiat (hero).                     |
-| 1 principal + 3 mici                   | Un hero + o coloană cu 3 articole compacte.              |
-| 1 principal + 6 mici (lățime completă) | Hero + două coloane a câte 3 articole (lățime completă). |
-| 1 principal sus + 3 dedesubt           | Hero mare sus + rând de 3 carduri dedesubt.              |
-| Principal pe poză (slideshow)          | Slideshow cu titlul suprapus pe imagine.                 |
-| 4 articole în grilă (2×2)              | Grilă de 4 carduri.                                      |
-| Listă de articole                      | Listă verticală cu buton „Mai multe".                    |
-| Rânduri de 3                           | Unul sau mai multe rânduri etichetate a câte 3 carduri.  |
-| Rânduri de 4                           | Rânduri a câte 4 carduri (lățime completă).              |
-| Rânduri de 4 mici                      | Rânduri compacte de 4 coloane.                           |
-| Slideshow articole                     | Slideshow cu articole rotative.                          |
+| Etichetă                                    | Descriere                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 1 articol principal                         | Un singur articol evidențiat (hero).                                                                                                |
+| 1 principal + mici în dreapta               | Hero + coloană cu 1–3 articole compacte (selector).                                                                                 |
+| 1 principal + mici în dreapta (complet)     | Hero + două coloane a câte 1–3 articole (lățime completă).                                                                          |
+| 1 principal pe mijloc + mici stânga/dreapta | Hero pe mijloc + 1–3 articole pe fiecare parte (lățime completă).                                                                   |
+| 1 principal sus + mici dedesubt             | Hero mare sus + 1–3 carduri dedesubt (selector).                                                                                    |
+| Principal pe poză (slideshow)               | Slideshow cu titlul suprapus pe imagine.                                                                                            |
+| 4 articole în grilă (2×2)                   | Grilă de 4 carduri.                                                                                                                 |
+| Listă de articole                           | Listă verticală cu buton „Mai multe".                                                                                               |
+| Rânduri de 3                                | Unul sau mai multe rânduri etichetate a câte 3 carduri.                                                                             |
+| Rânduri de 4                                | Rânduri a câte 4 carduri (lățime completă).                                                                                         |
+| Rânduri de 4 mici                           | Rânduri compacte de 4 coloane.                                                                                                      |
+| Rânduri de 5                                | Rânduri a câte 5 carduri (lățime completă).                                                                                         |
+| Slideshow articole                          | Slideshow cu articole rotative.                                                                                                     |
+| 1 video + listă scroll (manual)             | Video principal + listă scrollabilă în dreapta (max. 10), doar desktop. Fiecare video (YouTube/upload) creează un articol publicat. |
+| 1 articol + listă scroll                    | Articol principal + listă scrollabilă în dreapta (1–10), ca modulul video, dar cu articole (sloturi / auto-completare).             |
+| Split (1 articol)                           | Un articol: media + titlu/meta pe două coloane (poate sta lângă sidebar). Opțiune inversă: text stânga, media dreapta.              |
 
 **Opțiuni per modul (variază în funcție de tip):**
 
 - Numărul de articole / slide-uri.
-- **Afișează rezumat** + numărul de **Rânduri** (1–8).
+- **Mici** / **Mici pe parte** / **Mici dedesubt**: selector 1 / 2 / 3 pentru modulele tip hero + listă.
+- **Afișează rezumat** + numărul de **Rânduri** (minim 1).
 - **Afișează categoria**.
+- **Aspect** (doar Split): media stânga / text dreapta, sau invers.
 - Modulele de tip „rânduri" permit **+ Rând categorie** / **+ Rând personalizat** cu categorie, titlu, număr de repetări și articole fixate (doar pe pagina principală).
 - Sloturile fixate de pe pagina principală au selector de articol și opțiuni per slot (**Afișează autor** / **Afișează data**).
 
-**Fila Pagina articol** are în plus: afișare rezumat, număr de rânduri, **⚙ Tipografie rezumat** și **⚙ Tipografie articol** (titlu + conținut).
+**Fila Pagina articol** are în plus: afișare rezumat, număr de rânduri, **⚙ Tipografie supratitlu**, **⚙ Tipografie rezumat**, **⚙ Tipografie bumbi** și **⚙ Tipografie articol** (categorie, supratitlu, titlu, autor, dată, vizualizări, conținut).
 
 ### 9.2 Coloana secundară (dreapta)
 
 - Comutator **Afișează coloana secundară**.
 - Poți adăuga blocuri de tip sidebar:
 
-| Bloc                            | Rol                                              |
-| ------------------------------- | ------------------------------------------------ |
-| Listă completă (ultimele știri) | Flux cu ultimele știri.                          |
-| Împărțit pe categorii           | Secțiuni pe categorii.                           |
-| Listă cu titlu pe imagine       | Listă cu titlul suprapus pe imagine.             |
-| Listă verticală articole        | Listă tip rânduri.                               |
-| Cele mai citite                 | Cele mai vizualizate articole (din anul curent). |
-| Listă categorie (clasic)        | Listă cu articole dintr-o singură categorie.     |
-| Slideshow                       | Slideshow în coloana laterală.                   |
-| Video                           | Videoclipuri (manuale sau din articole).         |
+| Bloc                            | Rol                                                                                                                                                                                                                               |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Listă completă (ultimele știri) | Flux cu ultimele știri.                                                                                                                                                                                                           |
+| Împărțit pe categorii           | Secțiuni pe categorii.                                                                                                                                                                                                            |
+| Listă cu titlu pe imagine       | Listă cu titlul suprapus pe imagine.                                                                                                                                                                                              |
+| Listă verticală articole        | Listă tip rânduri.                                                                                                                                                                                                                |
+| Cele mai citite                 | Cele mai vizualizate articole. Poți alege perioada de publicare: ultimele 24 de ore, 7 zile, 30 de zile, anul curent (implicit) sau tot timpul. Opțional: filtrare după **Categorie** (implicit toate) și **Afișează categoria**. |
+| Listă categorie (clasic)        | Listă cu articole dintr-o singură categorie.                                                                                                                                                                                      |
+| Slideshow                       | Slideshow în coloana laterală.                                                                                                                                                                                                    |
+| Video                           | Videoclipuri (manuale sau din articole). La video manual: titlu + categorie + URL/upload creează articol publicat.                                                                                                                |
+| Modul video                     | Un singur video (link / upload / select articol). La link/upload: titlu articol + categorie obligatorii → articol publicat.                                                                                                       |
+| Modul articole                  | Un singur articol selectat, cu denumire opțională.                                                                                                                                                                                |
+| Modul foto                      | O singură imagine încărcată (doar vizuală), cu denumire și titlu opționale.                                                                                                                                                       |
+| Modul principal + secundare     | Articol principal (imagine mare + titlu) și N secundare (titlu + miniatură), default 3.                                                                                                                                           |
 
 **Regulă:** „Listă completă" și „Împărțit pe categorii" nu pot exista simultan.
 
-Fiecare bloc: reordonare (↑↓), comutatoare pentru rezumat, ferestre de tipografie, buton **Elimină**, plus opțiuni specifice (număr de articole, titluri, alegere categorie, adrese video, poziția textului la slideshow etc.).
+Fiecare bloc: reordonare (↑↓), comutatoare pentru rezumat (unde e cazul), ferestre de tipografie, buton **Elimină**, plus opțiuni specifice (număr de articole, titluri, alegere categorie, adrese video, poziția textului la slideshow etc.).
+
+**Modul video / articole / foto** pot fi adăugate de mai multe ori. Denumirea (ex. „Video-ul zilei”, „Articolul zilei”, „Caricatura zilei”) este opțională — dacă e goală, antetul nu apare pe site. La **Modul foto**, **Titlu** apare sub imagine; tipografia lui se editează din ⚙ Tipografie → Titlu.
+
+La blocurile cu listă de articole poți **fixa articolul pe fiecare poziție** (gol = completare automată), la fel ca în coloana principală. Excepție: **Cele mai citite** rămâne determinist (după vizualizări, în perioada de publicare aleasă) și nu are selector de articol.
 
 ### 9.3 Ordine mobil
 
@@ -352,23 +375,25 @@ Fiecare bloc: reordonare (↑↓), comutatoare pentru rezumat, ferestre de tipog
 
 - **Setări tipografie** (per tip de text): mărime text (10–60px), grosime (400–800), culoare text, previzualizare, plus **Resetează** / **Anulează** / **Salvează**.
 - **Tipografie rezumat**: aceleași controale, doar pentru textul de rezumat.
+- **Tipografie supratitlu** / **Tipografie bumbi** (pagina articol): aceleași controale, pentru supratitlu, respectiv lista de bumbi de sub titlu.
 
 ---
 
 ## 10. Setări site
 
-Pagina `/settings`. Editorii pot **vizualiza**; doar **Admin** poate **Salva** (non-adminii văd mesajul „Doar administratorii pot modifica setările.").
+Pagina `/settings`. Editorii pot **vizualiza**; doar **Admin** poate **Salva** (non-adminii văd mesajul „Doar administratorii pot modifica setările."). Editorul șef nu are acces la această pagină.
 
 Secțiuni:
 
 1. **Meniu principal** — numărul maxim de categorii afișate în antet (1–20); **Afișează meniul „Mai multe"**; ce categorii intră în „Mai multe".
-2. **Tipografie** — mărimea și grosimea fontului pentru: titluri în liste, sumar în liste, titlu hero, titluri sidebar, titlu articol, conținut articol; plus **Rânduri rezumat (implicit)** (1–8).
-3. **Afișare articole** — **Afișează numărul de vizualizări pe site**.
-4. **Pseudonime autor** — listă cu adăugare/ștergere (maxim 20); **Salvează pseudonime**.
-5. **Identitate site** — Nume site, Slogan, încărcare/ștergere logo.
-6. **Culori** — Primară, Secundară, Accent, Fundal, Text (cu previzualizare); **Resetează culorile implicite**.
-7. **Rețele sociale** — adrese Facebook, Twitter/X, YouTube, Instagram.
-8. **Footer și pagini informative** — cod HTML pentru: contactul din footer, pagina Contact, Termeni și condiții, GDPR/Confidențialitate, politica de Cookie-uri.
+2. **Afișare articole** — **Afișează numărul de vizualizări pe site**; **Rânduri rezumat (implicit)** (minim 1; modulele pot suprascrie din Aspect).
+3. **Pseudonime autor** — listă cu adăugare/ștergere (maxim 20); **Salvează pseudonime**.
+4. **Identitate site** — Nume site, Slogan, încărcare/ștergere logo.
+5. **Culori** — Primară, Secundară, Accent, Fundal, Text (cu previzualizare); **Resetează culorile implicite**.
+6. **Rețele sociale** — URL + bifă „Afișează” pentru Facebook, Instagram, Twitter/X, YouTube, WhatsApp, TikTok; bifă de locație: linia de categorii (desktop), meniu burger (mobil), footer.
+7. **Footer și pagini informative** — cod HTML pentru: contactul din footer, pagina Contact, Termeni și condiții, GDPR/Confidențialitate, politica de Cookie-uri.
+
+Tipografia (mărime, grosime, culoare) se configurează per modul / bloc din **Aspect**, nu din Setări.
 
 ---
 
@@ -381,7 +406,7 @@ Pagina `/notifications` (toți utilizatorii). Aici îți setezi preferințele pe
 - **Adresă email pentru notificări**
 - **Număr de telefon Signal** (format E.164, ex. `+40712345678`)
 
-**Alerte** (doar Editor / Admin):
+**Alerte** (doar Editor / Editor șef / Admin):
 
 - **Articol trimis spre revizie** — bife pentru Email / Signal (dezactivate până completezi datele de contact).
 
@@ -393,7 +418,7 @@ Butonul **Salvează** înregistrează preferințele tale personale.
 
 Pagina `/audit`. Un tabel cu coloanele: **Acțiune**, **Entitate**, **Actor**, **Data** (paginat, câte 20 pe pagină).
 
-- **Admin / Editor** văd toată activitatea.
+- **Admin / Editor șef / Editor** văd toată activitatea.
 - **Autor** vede doar propria activitate.
 
 Acțiuni înregistrate automat: autentificări/deconectări, creare/modificare/ștergere/tranziții de articole, încărcări media, invitare/modificare utilizatori, modificări de setări și operațiuni pe categorii.
@@ -419,7 +444,7 @@ Pagina `/users` — **doar Admin**.
 **Mod editare:**
 
 - Nume afișat.
-- Rol (Autor / Editor / Admin) — nu îți poți schimba propriul rol.
+- Rol (Autor / Editor / Editor șef / Admin) — nu îți poți schimba propriul rol.
 - Cont activ — nu te poți dezactiva pe tine însuți.
 - Parolă nouă (opțional) cu buton **Auto** de generare.
 - **Salvează** / **Anulează**.
@@ -435,7 +460,8 @@ Pagina `/users` — **doar Admin**.
 
 | Zonă din panou                                                    | Efect pe site-ul public                                               |
 | ----------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Setări (culori, fonturi, logo, tipografie)                        | Aspectul global: antet, titluri, rezumate, textul articolelor.        |
+| Setări (culori, fonturi, logo)                                    | Aspectul global: antet, culori, identitate.                           |
+| Aspect (tipografie per modul/bloc)                                | Mărimea, grosimea și culoarea textului pe module și sidebar.          |
 | Setări (afișare vizualizări)                                      | Afișarea numărului de vizualizări la articole.                        |
 | Setări (meniu „Mai multe")                                        | Câte categorii apar în navigație vs. în meniul „Mai multe".           |
 | Setări (HTML pagini legale)                                       | Conținutul paginilor Contact, Termeni, Confidențialitate, Cookie-uri. |
@@ -454,10 +480,10 @@ Site-ul public include și: fluxul de pe pagina de start (module + coloană late
 ## 15. Întrebări frecvente
 
 **Nu văd butoanele de publicare la un articol.**
-Verifică rolul: publicarea/aprobarea sunt disponibile doar pentru Editor și Admin. Autorii pot doar să trimită spre revizie.
+Verifică rolul: publicarea/aprobarea sunt disponibile pentru Editor, Editor șef și Admin. Autorii pot doar să trimită spre revizie.
 
 **De ce nu pot edita un articol publicat?**
-Editorii trebuie să arhiveze mai întâi articolul; doar adminii pot edita articolele deja publicate.
+Editorii trebuie să arhiveze mai întâi articolul; editorul șef și adminii pot edita articolele deja publicate.
 
 **Am șters un pill din greșeală?**
 Un pill nu poate fi șters cât timp este atașat unor articole — mai întâi trebuie detașat din secțiunea „Articole cu acest pill".

@@ -4,10 +4,10 @@ import { injectRouter } from '@analogjs/router';
 import { BreadcrumbComponent } from '../../components/breadcrumb.component';
 import { ModuleLayoutComponent } from '../../components/modules/module-layout.component';
 import { HomeListItemComponent } from '../../components/home-list-item.component';
-import { PostImagePillComponent } from '../../components/post-image-pill.component';
+import { PostImagePillsComponent } from '../../components/post-image-pills.component';
+import { PostSubtitleComponent } from '../../components/post-subtitle.component';
 import { PostViewCountComponent } from '../../components/post-view-count.component';
 import { SiteSettingsService } from '../../services/site-settings.service';
-import { formatPostDateForList } from '../../utils/post-date-display';
 import type { CategoryDetail } from '@civicpress/shared';
 
 @Component({
@@ -18,7 +18,8 @@ import type { CategoryDetail } from '@civicpress/shared';
     BreadcrumbComponent,
     ModuleLayoutComponent,
     HomeListItemComponent,
-    PostImagePillComponent,
+    PostImagePillsComponent,
+    PostSubtitleComponent,
     PostViewCountComponent,
   ],
   template: `
@@ -38,16 +39,21 @@ import type { CategoryDetail } from '@civicpress/shared';
         </div>
       }
 
-      @if (data.modules && data.modules.length > 0) {
-        <!-- Page 1: configured module layout -->
+      @if (
+        (data.modules && data.modules.length > 0) ||
+        (data.mobileModules && data.mobileModules.length > 0)
+      ) {
+        <!-- Configured module layout (page 1 full; page 2+ list + same sidebar) -->
         <cp-module-layout
-          [modules]="data.modules"
+          [modules]="data.modules ?? []"
           [sidebar]="data.sidebar ?? null"
           [mobileOrder]="data.mobileOrder ?? []"
+          [mobileModules]="data.mobileModules ?? []"
           [categorySlug]="data.slug"
+          [showDesktop]="!!(data.modules && data.modules.length > 0)"
         />
       } @else {
-        <!-- Pages 2+: paginated list -->
+        <!-- Fallback list when no category layout is configured -->
         <div class="divide-y divide-border">
           @for (post of data.posts; track post.id) {
             <!-- Mobile: reuse cp-home-list-item (compact row) -->
@@ -69,7 +75,7 @@ import type { CategoryDetail } from '@civicpress/shared';
                         width="240"
                         height="160"
                       />
-                      <cp-post-image-pill [pill]="post.pill" />
+                      <cp-post-image-pills [pills]="post.pills" />
                     </div>
                   </a>
                 }
@@ -92,14 +98,13 @@ import type { CategoryDetail } from '@civicpress/shared';
                       {{ post.title }}
                     </a>
                   </h2>
-                  @if (showCategorySummary() && post.excerpt) {
-                    <p
-                      class="text-gray-600 line-clamp-3"
-                      style="font-size: var(--news-summary-font-size, 14px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, currentColor);"
-                    >
-                      {{ cleanExcerpt(post.excerpt) }}
-                    </p>
-                  }
+                  <cp-post-subtitle
+                    [show]="showCategorySummary()"
+                    [bulbi]="post.bulbi ?? []"
+                    [excerpt]="post.excerpt"
+                    listClass="text-gray-600"
+                    textClass="text-gray-600"
+                  />
                   <div class="flex items-center gap-2 mt-2 text-xs text-gray-500">
                     @if (canShowAuthor(post) && displayAuthor(post); as authorName) {
                       <span>{{ authorName }}</span>
@@ -218,11 +223,7 @@ export default class CatListComponent {
     return range;
   }
 
-  cleanExcerpt(excerpt: string): string {
-    return excerpt.replace(/<[^>]*>/g, '').trim();
-  }
-
   formatDate(dateStr: string): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr);
   }
 }

@@ -2,9 +2,10 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { forkJoin } from 'rxjs';
 import { ApiService } from '../../services/api.service';
 import { ToastService } from '../../services/toast.service';
-import type { AdminPill } from '@civicpress/shared';
+import type { AdminPill, PillCorner } from '@civicpress/shared';
 
 interface EditState {
   text: string;
@@ -22,7 +23,7 @@ interface EditState {
         <div>
           <h1 class="text-xl font-bold text-gray-800">Pill-uri imagine</h1>
           <p class="text-sm text-gray-500 mt-0.5">
-            Badge-uri colorate afișate în colțul din dreapta sus al imaginilor articolelor.
+            Badge-uri colorate afișate pe imaginile articolelor.
           </p>
         </div>
         <button
@@ -37,6 +38,63 @@ interface EditState {
       @if (loading()) {
         <div class="text-center py-12 text-gray-400">Se încarcă…</div>
       } @else {
+        <section class="bg-white border border-gray-200 rounded-xl p-5 mb-6 shadow-sm">
+          <h2 class="text-sm font-semibold text-gray-700 mb-1">Aspect global</h2>
+          <p class="text-xs text-gray-400 mb-4">
+            Colțul implicit (când un articol are un singur pill fără colț setat), mărimea textului
+            și transparența se aplică pe tot site-ul. Colțul poate fi schimbat per articol din
+            editor.
+          </p>
+          <div class="grid gap-4 sm:grid-cols-3">
+            <label class="block">
+              <span class="text-xs font-medium text-gray-600">Colț</span>
+              <select
+                [(ngModel)]="styleForm.pillCorner"
+                name="pillCorner"
+                class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                <option value="top-left">Stânga sus</option>
+                <option value="top-right">Dreapta sus</option>
+                <option value="bottom-left">Stânga jos</option>
+                <option value="bottom-right">Dreapta jos</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-xs font-medium text-gray-600">Mărime text (px)</span>
+              <input
+                type="number"
+                min="8"
+                max="24"
+                [(ngModel)]="styleForm.pillFontSize"
+                name="pillFontSize"
+                class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </label>
+            <label class="block">
+              <span class="text-xs font-medium text-gray-600">Transparență (0–100)</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                [(ngModel)]="styleForm.pillTransparency"
+                name="pillTransparency"
+                class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <span class="mt-1 block text-xs text-gray-400">0 = opac, 100 = transparent</span>
+            </label>
+          </div>
+          <div class="mt-4 flex justify-end">
+            <button
+              type="button"
+              (click)="saveStyle()"
+              [disabled]="savingStyle()"
+              class="px-4 py-2 text-sm bg-red-700 text-white rounded-lg hover:bg-red-800 transition-colors disabled:opacity-50 font-medium"
+            >
+              {{ savingStyle() ? 'Se salvează…' : 'Salvează aspectul' }}
+            </button>
+          </div>
+        </section>
+
         @if (addingNew()) {
           <div class="bg-white border-2 border-red-200 rounded-xl p-5 mb-4 shadow-sm">
             <h2 class="text-sm font-semibold text-gray-700 mb-4">Pill nou</h2>
@@ -281,6 +339,7 @@ export class PillsListComponent implements OnInit {
 
   loading = signal(true);
   saving = signal(false);
+  savingStyle = signal(false);
   detaching = signal<string | null>(null);
   addingNew = signal(false);
   editingId = signal<string | null>(null);
@@ -288,6 +347,11 @@ export class PillsListComponent implements OnInit {
 
   newForm = { text: '', color: '#8A0808', textColor: '#ffffff' };
   editForm: EditState = { text: '', color: '#8A0808', textColor: '#ffffff' };
+  styleForm = {
+    pillCorner: 'top-right' as PillCorner,
+    pillFontSize: 12,
+    pillTransparency: 0,
+  };
 
   ngOnInit() {
     this.load();
@@ -295,9 +359,17 @@ export class PillsListComponent implements OnInit {
 
   load() {
     this.loading.set(true);
-    this.api.getPills().subscribe({
-      next: (pills) => {
+    forkJoin({
+      pills: this.api.getPills(),
+      settings: this.api.getSettings(),
+    }).subscribe({
+      next: ({ pills, settings }) => {
         this.pills.set(pills);
+        this.styleForm = {
+          pillCorner: settings.pillCorner,
+          pillFontSize: settings.pillFontSize,
+          pillTransparency: settings.pillTransparency,
+        };
         this.loading.set(false);
       },
       error: () => {
@@ -305,6 +377,39 @@ export class PillsListComponent implements OnInit {
         this.toast.error('Eroare la încărcarea pill-urilor');
       },
     });
+  }
+
+  saveStyle() {
+    const fontSize = Math.min(
+      24,
+      Math.max(8, Math.floor(Number(this.styleForm.pillFontSize) || 12)),
+    );
+    const transparency = Math.min(
+      100,
+      Math.max(0, Math.floor(Number(this.styleForm.pillTransparency) || 0)),
+    );
+    this.savingStyle.set(true);
+    this.api
+      .updateSettings({
+        pillCorner: this.styleForm.pillCorner,
+        pillFontSize: fontSize,
+        pillTransparency: transparency,
+      })
+      .subscribe({
+        next: (settings) => {
+          this.styleForm = {
+            pillCorner: settings.pillCorner,
+            pillFontSize: settings.pillFontSize,
+            pillTransparency: settings.pillTransparency,
+          };
+          this.savingStyle.set(false);
+          this.toast.success('Aspect pill-uri salvat');
+        },
+        error: () => {
+          this.savingStyle.set(false);
+          this.toast.error('Salvarea aspectului a eșuat');
+        },
+      });
   }
 
   startNew() {

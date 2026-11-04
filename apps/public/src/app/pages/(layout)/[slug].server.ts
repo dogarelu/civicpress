@@ -1,4 +1,4 @@
-import { createError } from 'h3';
+import type { H3Event } from 'h3';
 import type { PostDetail } from '@civicpress/shared';
 
 const BACKEND = process.env['BACKEND_URL'] ?? 'http://localhost:3000';
@@ -9,13 +9,13 @@ export const load = async ({
 }: {
   fetch: typeof $fetch;
   params: Record<string, string>;
-  event: unknown;
+  event: H3Event;
 }) => {
   const slug = params['slug'] ?? '';
   try {
     const post = await fetch<PostDetail>(`${BACKEND}/v1/posts/${slug}`);
     return { post };
   } catch {
-    throw createError({ statusCode: 404, statusMessage: 'Articolul nu a fost găsit' });
+    return { post: null };
   }
 };

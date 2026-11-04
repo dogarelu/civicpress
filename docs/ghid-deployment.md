@@ -377,16 +377,17 @@ sudo certbot --nginx -d civicpress.ro -d www.civicpress.ro
 
 Reguli de rutare (blocul HTTPS):
 
-| Locație                        | Acțiune                           | Upstream                       |
-| ------------------------------ | --------------------------------- | ------------------------------ |
-| `/.well-known/acme-challenge/` | fișiere statice                   | `/var/www/letsencrypt`         |
-| `/v1/`                         | proxy                             | `http://127.0.0.1:3000/v1/`    |
-| `= /admin`                     | redirect 301                      | `/admin/`                      |
-| `/admin/`                      | proxy (cu upgrade WebSocket)      | `http://127.0.0.1:4300/admin/` |
-| `/api/_analog/`                | rewrite `^/api/(.*)$ /$1` + proxy | `http://127.0.0.1:4200`        |
-| `/`                            | proxy (cu upgrade WebSocket)      | `http://127.0.0.1:4200`        |
+| Locație                        | Acțiune                           | Upstream                                                                                              |
+| ------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `www.civicpress.ro`            | redirect 301                      | `https://civicpress.ro$request_uri` (apex; evită origini diferite pentru iframe-ul de previzualizare) |
+| `/.well-known/acme-challenge/` | fișiere statice                   | `/var/www/letsencrypt`                                                                                |
+| `/v1/`                         | proxy                             | `http://127.0.0.1:3000/v1/`                                                                           |
+| `= /admin`                     | redirect 301                      | `/admin/`                                                                                             |
+| `/admin/`                      | proxy (cu upgrade WebSocket)      | `http://127.0.0.1:4300/admin/`                                                                        |
+| `/api/_analog/`                | rewrite `^/api/(.*)$ /$1` + proxy | `http://127.0.0.1:4200`                                                                               |
+| `/`                            | proxy (cu upgrade WebSocket)      | `http://127.0.0.1:4200`                                                                               |
 
-Setări proxy (toate locațiile): `client_max_body_size 20m`; `proxy_read_timeout 120s`, `proxy_send_timeout 120s`, `proxy_connect_timeout 10s`; headere `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`; headere de securitate HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`.
+Setări proxy (toate locațiile): `client_max_body_size 110m`; `proxy_read_timeout 120s`, `proxy_send_timeout 120s`, `proxy_connect_timeout 10s`; pe `/v1/` și `proxy_request_buffering off` + timeout 300s (upload video); headere `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto`; headere de securitate HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`.
 
 Blocul HTTP: servește ACME challenge și redirecționează 301 către HTTPS.
 
@@ -438,7 +439,7 @@ Recomandări DNS: TTL 300 la record-ul A apex; `www` ca CNAME către hostname-ul
 - Procesare imagini (Sharp): aplică rotația EXIF, elimină metadatele; la upload pre-generează variantele `thumb` (160px), `medium` (500px), `large` (1080px) în WebP.
 - Variante la cerere prin URL: `45`, `64`, `90`, `160`, `240`, `272`, `500`, `660`, `768`, `1080`, `orig` — cache-uite în `storage/media/cache/`.
 - Videoclipurile se servesc doar în original.
-- Limita de upload multipart la backend: 10 MB (nginx permite până la 20 MB pe request).
+- Limita de upload multipart la backend: 100 MB (nginx permite până la 110 MB pe request, ca să acopere overhead-ul multipart).
 
 ---
 
@@ -455,13 +456,13 @@ Recomandări DNS: TTL 300 la record-ul A apex; `www` ca CNAME către hostname-ul
 - **Helmet**: activ (CSP dezactivat; `crossOriginResourcePolicy: cross-origin`).
 - **De configurat obligatoriu în producție**: secrete proprii și puternice pentru `JWT_SECRET` și `COOKIE_SECRET` (nu valorile din `.env.example`); setează `NODE_ENV=production`.
 
-Roluri: `AUTHOR`, `EDITOR`, `ADMIN`.
+Roluri: `AUTHOR`, `EDITOR`, `CHIEF_EDITOR`, `ADMIN`.
 
 ---
 
 ## 14. Referință API
 
-Toate rutele sunt sub `http://<host>:3000` (fără prefix global `/api`; calea `v1/...` e inclusă în controllere). „AUTHOR+" = AUTHOR/EDITOR/ADMIN; „EDITOR+" = EDITOR/ADMIN.
+Toate rutele sunt sub `http://<host>:3000` (fără prefix global `/api`; calea `v1/...` e inclusă în controllere). „AUTHOR+" = AUTHOR/EDITOR/CHIEF_EDITOR/ADMIN; „EDITOR+" = EDITOR/ADMIN (fără CHIEF_EDITOR — editorul șef nu gestionează categorii, layout-uri sau setări); „EDITORIAL+" = EDITOR/CHIEF_EDITOR/ADMIN.
 
 ### Auth
 
@@ -544,11 +545,11 @@ Toate rutele sunt sub `http://<host>:3000` (fără prefix global `/api`; calea `
 | ----------------- | -------------------- | ---------------- | --------------------------- |
 | GET               | `/v1/exchange-rates` | Public           | Curs valutar BNR (cache 1h) |
 | GET               | `/v1/admin/pills`    | AUTHOR+          | Listă pill-uri              |
-| POST/PATCH/DELETE | `/v1/admin/pills...` | EDITOR+          | Gestionare pill-uri         |
+| POST/PATCH/DELETE | `/v1/admin/pills...` | EDITORIAL+       | Gestionare pill-uri         |
 | GET               | `/v1/audit`          | Autentificat\*\* | Jurnal de audit             |
 | GET               | `/v1/health`         | Public           | Health check (`SELECT 1`)   |
 
-`**` ADMIN vede tot; ceilalți au nevoie de `?mine=1`.
+`**` ADMIN și CHIEF_EDITOR văd tot; ceilalți au nevoie de `?mine=1`.
 
 Note funcționale:
 
@@ -566,14 +567,14 @@ Enums:
 
 | Enum         | Valori                                                     |
 | ------------ | ---------------------------------------------------------- |
-| `Role`       | `AUTHOR`, `EDITOR`, `ADMIN`                                |
+| `Role`       | `AUTHOR`, `EDITOR`, `CHIEF_EDITOR`, `ADMIN`                |
 | `PostStatus` | `DRAFT`, `IN_REVIEW`, `SCHEDULED`, `PUBLISHED`, `ARCHIVED` |
 
 Modele principale:
 
 **SiteSettings** — singleton (`id=default`)
 
-- Câmpuri: branding, tipografie, meniu antet, HTML pagini legale, URL-uri sociale
+- Câmpuri: branding, meniu antet, HTML pagini legale, URL-uri sociale + bifă afișare + locații (antet desktop, meniu burger, footer; tipografia se configurează per modul în Aspect)
 - Relații: → `logoMedia`, `faviconMedia`
 
 **PageLayout**
@@ -592,7 +593,7 @@ Modele principale:
 
 **Category**
 
-- Câmpuri: `name`, `slug`, `color`, `description`, `parentId`, `showInMenu`, `menuOrder`, `externalId`
+- Câmpuri: `name`, `slug`, `color`, `description`, `parentId`, `showInMenu`, `showInMobileMenu`, `showInMobileRow`, `menuOrder`, `externalId`
 - Relații: auto-referențială părinte/copii; → posturi (PostCategory)
 
 **Pill**

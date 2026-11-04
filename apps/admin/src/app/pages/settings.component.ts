@@ -1,16 +1,17 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
 import { ApiService } from '../services/api.service';
 import { ToastService } from '../services/toast.service';
 import { AuthStore } from '../services/auth.store';
 import { firstValueFrom, forkJoin } from 'rxjs';
-import type { AdminCategory, AdminSettings } from '@civicpress/shared';
+import type { AdminSettings, SettingsUpdate } from '@civicpress/shared';
 
 @Component({
   selector: 'cp-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterModule],
   template: `
     <div class="p-6 max-w-3xl">
       <h1 class="text-2xl font-bold text-gray-800 mb-6">Setări</h1>
@@ -18,116 +19,26 @@ import type { AdminCategory, AdminSettings } from '@civicpress/shared';
       @if (loading()) {
         <p class="text-sm text-gray-400">Se încarcă…</p>
       } @else if (form) {
-        <form (ngSubmit)="save()" class="space-y-6">
+        @if (!isAdmin()) {
+          <p class="mb-4 text-xs text-amber-600">Doar administratorii pot modifica setările.</p>
+        }
+        <div class="space-y-6">
           <!-- Meniu / Header -->
           <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h2 class="font-semibold text-gray-800 mb-4">Meniu principal</h2>
-            <label class="block">
-              <span class="text-sm font-medium text-gray-700"
-                >Număr maxim de categorii în meniu</span
-              >
-              <input
-                type="number"
-                min="1"
-                max="20"
-                [(ngModel)]="form.headerMaxCategories"
-                name="headerMaxCategories"
-                class="mt-1 block w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              />
-              <span class="mt-1 block text-xs text-gray-400">
-                Categoriile suplimentare vor apărea într-un meniu derulant „Mai multe”.
-              </span>
-            </label>
-
-            <label class="mt-4 inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                [(ngModel)]="form.headerShowMoreDropdown"
-                name="headerShowMoreDropdown"
-                class="rounded border-gray-300"
-              />
-              Afișează meniul „Mai multe”
-            </label>
-
-            @if (form.headerShowMoreDropdown) {
-              <div class="mt-4">
-                <p class="text-sm font-medium text-gray-700">Categorii în „Mai multe”</p>
-                <p class="text-xs text-gray-400 mt-1">
-                  Dacă nu selectezi nimic, meniul va folosi automat categoriile care depășesc limita
-                  de mai sus.
-                </p>
-                <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  @for (cat of menuCategories(); track cat.id) {
-                    <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        [checked]="isMoreCategorySelected(cat.id)"
-                        (change)="toggleMoreCategory(cat.id, $any($event.target).checked)"
-                        class="rounded border-gray-300"
-                      />
-                      {{ cat.name }}
-                    </label>
-                  }
-                </div>
-              </div>
-            }
-          </section>
-
-          <!-- Tipografie -->
-          <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h2 class="font-semibold text-gray-800 mb-4">Tipografie</h2>
-            <div class="space-y-3">
-              <div
-                class="hidden sm:grid grid-cols-[1fr_8rem_11rem] gap-4 text-xs font-medium text-gray-400 uppercase tracking-wide"
-              >
-                <span>Element</span>
-                <span>Mărime (px)</span>
-                <span>Grosime</span>
-              </div>
-              @for (row of typographyRows; track row.sizeKey) {
-                <div
-                  class="grid grid-cols-1 sm:grid-cols-[1fr_8rem_11rem] gap-2 sm:gap-4 sm:items-center"
-                >
-                  <div>
-                    <span class="text-sm font-medium text-gray-700">{{ row.label }}</span>
-                    <span class="block text-xs text-gray-400">{{ row.hint }}</span>
-                  </div>
-                  <input
-                    type="number"
-                    min="10"
-                    max="60"
-                    [(ngModel)]="$any(form)[row.sizeKey]"
-                    [name]="row.sizeKey"
-                    class="block w-32 sm:w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                  />
-                  <select
-                    [(ngModel)]="$any(form)[row.weightKey]"
-                    [name]="row.weightKey"
-                    class="block w-48 sm:w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                  >
-                    @for (w of fontWeights; track w.value) {
-                      <option [ngValue]="w.value">{{ w.label }}</option>
-                    }
-                  </select>
-                </div>
-              }
-            </div>
-
-            <label class="mt-4 block">
-              <span class="text-sm font-medium text-gray-700">Rânduri rezumat (implicit)</span>
-              <input
-                type="number"
-                min="1"
-                max="8"
-                [(ngModel)]="form.defaultSummaryRows"
-                name="defaultSummaryRows"
-                class="mt-1 block w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-              />
-              <span class="mt-1 block text-xs text-gray-400">
-                Numărul de rânduri afișate din rezumat pe site. Modulele pot suprascrie această
-                valoare din Layouts.
-              </span>
-            </label>
+            <h2 class="font-semibold text-gray-800 mb-2">Meniu principal</h2>
+            <p class="text-sm text-gray-600">
+              Meniul desktop (categorii, culori, font, „Mai multe”) se configurează la
+              <a
+                routerLink="/layouts"
+                [queryParams]="{ tab: 'tickers' }"
+                class="text-red-700 underline"
+                >Aspect pagini → Benzi de sus</a
+              >.
+            </p>
+            <p class="text-xs text-gray-400 mt-2">
+              Flag-urile din Categorii (web / burger / rând mobil) rămân valabile pentru meniul de
+              pe telefon.
+            </p>
           </section>
 
           <!-- Afișare articole -->
@@ -146,6 +57,49 @@ import type { AdminCategory, AdminSettings } from '@civicpress/shared';
               Când este activ, numărul de vizualizări apare pe toate paginile publice (liste,
               module, pagina articolului).
             </p>
+
+            <label class="mt-4 block">
+              <span class="text-sm font-medium text-gray-700">Format dată</span>
+              <select
+                [(ngModel)]="form.postDateFormat"
+                name="postDateFormat"
+                class="mt-1 block w-full max-w-md rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              >
+                <option value="time-if-today">Oră dacă e azi, dată în rest</option>
+                <option value="always-date">Întotdeauna data (inclusiv azi)</option>
+              </select>
+              <span class="mt-1 block text-xs text-gray-400">
+                Implicit, articolele de azi arată ora (ex. 14:30), iar celelalte arată data.
+                Modulele pot suprascrie această valoare din Aspect.
+              </span>
+            </label>
+
+            <label class="mt-4 block">
+              <span class="text-sm font-medium text-gray-700">Rânduri rezumat (implicit)</span>
+              <input
+                type="number"
+                min="1"
+                [(ngModel)]="form.defaultSummaryRows"
+                name="defaultSummaryRows"
+                class="mt-1 block w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+              />
+              <span class="mt-1 block text-xs text-gray-400">
+                Numărul de rânduri afișate din rezumat pe site. Modulele pot suprascrie această
+                valoare din Aspect.
+              </span>
+            </label>
+
+            <div class="mt-5 flex justify-end">
+              <button
+                type="button"
+                (click)="saveArticleDisplay()"
+                [disabled]="isSaving('articleDisplay') || !isAdmin()"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style="background-color: #8A0808"
+              >
+                {{ isSaving('articleDisplay') ? 'Se salvează…' : 'Salvează' }}
+              </button>
+            </div>
           </section>
 
           <!-- Pseudonime autor -->
@@ -201,7 +155,7 @@ import type { AdminCategory, AdminSettings } from '@civicpress/shared';
                 [disabled]="savingPseudonyms()"
                 class="px-4 py-2 bg-red-700 text-white text-sm font-medium rounded-lg hover:bg-red-800 disabled:opacity-50 transition-colors"
               >
-                {{ savingPseudonyms() ? 'Se salvează…' : 'Salvează pseudonime' }}
+                {{ savingPseudonyms() ? 'Se salvează…' : 'Salvează' }}
               </button>
             </div>
           </section>
@@ -230,44 +184,103 @@ import type { AdminCategory, AdminSettings } from '@civicpress/shared';
                 />
               </label>
             </div>
-            <div class="mt-4 space-y-3">
-              <div class="flex items-center gap-3">
-                <div
-                  class="h-16 w-28 rounded border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden"
-                >
-                  @if (form.logoUrl) {
-                    <img
-                      [src]="form.logoUrl"
-                      alt="Siglă site"
-                      class="h-full w-full object-contain"
-                    />
-                  } @else {
-                    <span class="text-xs text-gray-400 px-2 text-center">Fără siglă</span>
+            <div class="mt-4 space-y-5">
+              <div class="space-y-3">
+                <p class="text-sm font-medium text-gray-700">Siglă desktop</p>
+                <div class="flex items-center gap-3">
+                  <div
+                    class="h-16 w-28 rounded border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden"
+                  >
+                    @if (form.logoUrl) {
+                      <img
+                        [src]="form.logoUrl"
+                        alt="Siglă desktop"
+                        class="h-full w-full object-contain"
+                      />
+                    } @else {
+                      <span class="text-xs text-gray-400 px-2 text-center">Fără siglă</span>
+                    }
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    Apare în header-ul desktop. Formate recomandate: PNG, SVG, WebP.
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    (change)="onLogoChange($event)"
+                    class="block text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+                  />
+                  <button
+                    type="button"
+                    (click)="removeLogo()"
+                    [disabled]="uploadingLogo() || (!form.logoMediaId && !form.logoUrl)"
+                    class="px-3 py-1.5 rounded border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Elimină sigla
+                  </button>
+                  @if (uploadingLogo()) {
+                    <span class="text-xs text-gray-400">Se încarcă sigla…</span>
                   }
                 </div>
-                <div class="text-xs text-gray-500">
-                  Sigla va apărea în header-ul public. Formate recomandate: PNG, SVG, WebP.
+              </div>
+
+              <div class="space-y-3 border-t border-gray-100 pt-4">
+                <p class="text-sm font-medium text-gray-700">Siglă mobil</p>
+                <div class="flex items-center gap-3">
+                  <div
+                    class="h-10 w-40 rounded border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden"
+                  >
+                    @if (form.mobileLogoUrl) {
+                      <img
+                        [src]="form.mobileLogoUrl"
+                        alt="Siglă mobil"
+                        class="h-full w-full object-contain"
+                      />
+                    } @else {
+                      <span class="text-xs text-gray-400 px-2 text-center">Fără siglă mobil</span>
+                    }
+                  </div>
+                  <div class="text-xs text-gray-500">
+                    Variantă mai lată și mai scundă pentru header-ul mobil. Dacă lipsește, se
+                    folosește sigla desktop.
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    (change)="onMobileLogoChange($event)"
+                    class="block text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+                  />
+                  <button
+                    type="button"
+                    (click)="removeMobileLogo()"
+                    [disabled]="
+                      uploadingMobileLogo() || (!form.mobileLogoMediaId && !form.mobileLogoUrl)
+                    "
+                    class="px-3 py-1.5 rounded border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Elimină sigla mobil
+                  </button>
+                  @if (uploadingMobileLogo()) {
+                    <span class="text-xs text-gray-400">Se încarcă sigla mobil…</span>
+                  }
                 </div>
               </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  (change)="onLogoChange($event)"
-                  class="block text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
-                />
-                <button
-                  type="button"
-                  (click)="removeLogo()"
-                  [disabled]="uploadingLogo() || (!form.logoMediaId && !form.logoUrl)"
-                  class="px-3 py-1.5 rounded border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Elimină sigla
-                </button>
-                @if (uploadingLogo()) {
-                  <span class="text-xs text-gray-400">Se încarcă sigla…</span>
-                }
-              </div>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+              <button
+                type="button"
+                (click)="saveIdentity()"
+                [disabled]="isSaving('identity') || !isAdmin()"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style="background-color: #8A0808"
+              >
+                {{ isSaving('identity') ? 'Se salvează…' : 'Salvează' }}
+              </button>
             </div>
           </section>
 
@@ -386,56 +399,184 @@ import type { AdminCategory, AdminSettings } from '@civicpress/shared';
                 Buton accent
               </button>
             </div>
+
+            <div class="mt-5 flex justify-end">
+              <button
+                type="button"
+                (click)="saveColors()"
+                [disabled]="isSaving('colors') || !isAdmin()"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style="background-color: #8A0808"
+              >
+                {{ isSaving('colors') ? 'Se salvează…' : 'Salvează' }}
+              </button>
+            </div>
           </section>
 
           <!-- Social -->
           <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-            <h2 class="font-semibold text-gray-800 mb-4">Rețele sociale</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <label class="block">
-                <span class="text-sm font-medium text-gray-700">Facebook</span>
+            <h2 class="font-semibold text-gray-800 mb-1">Rețele sociale</h2>
+            <p class="text-xs text-gray-400 mb-3">
+              Iconurile apar doar dacă URL-ul este completat, bifa „Afișează” este activă și locația
+              de mai jos este bifată.
+            </p>
+            <p class="text-sm font-medium text-gray-700 mb-2">Afișează în</p>
+            <div class="mb-4 flex flex-wrap gap-x-5 gap-y-2">
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="form.showSocialInHeader"
+                  name="showSocialInHeader"
+                  class="rounded border-gray-300"
+                />
+                Linia de categorii (desktop)
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="form.showSocialInMobileMenu"
+                  name="showSocialInMobileMenu"
+                  class="rounded border-gray-300"
+                />
+                Meniu burger (mobil)
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  [(ngModel)]="form.showSocialInFooter"
+                  name="showSocialInFooter"
+                  class="rounded border-gray-300"
+                />
+                Footer
+              </label>
+            </div>
+            <div class="space-y-3">
+              <div class="grid grid-cols-[7.5rem_1fr] items-center gap-3">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="form.showFacebook"
+                    name="showFacebook"
+                    class="rounded border-gray-300"
+                  />
+                  Facebook
+                </label>
                 <input
                   type="url"
                   [ngModel]="form.facebookUrl ?? ''"
                   (ngModelChange)="form.facebookUrl = $event.trim() || null"
                   name="facebookUrl"
                   placeholder="https://…"
-                  class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 />
-              </label>
-              <label class="block">
-                <span class="text-sm font-medium text-gray-700">Twitter / X</span>
-                <input
-                  type="url"
-                  [ngModel]="form.twitterUrl ?? ''"
-                  (ngModelChange)="form.twitterUrl = $event.trim() || null"
-                  name="twitterUrl"
-                  placeholder="https://…"
-                  class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                />
-              </label>
-              <label class="block">
-                <span class="text-sm font-medium text-gray-700">YouTube</span>
-                <input
-                  type="url"
-                  [ngModel]="form.youtubeUrl ?? ''"
-                  (ngModelChange)="form.youtubeUrl = $event.trim() || null"
-                  name="youtubeUrl"
-                  placeholder="https://…"
-                  class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                />
-              </label>
-              <label class="block">
-                <span class="text-sm font-medium text-gray-700">Instagram</span>
+              </div>
+              <div class="grid grid-cols-[7.5rem_1fr] items-center gap-3">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="form.showInstagram"
+                    name="showInstagram"
+                    class="rounded border-gray-300"
+                  />
+                  Instagram
+                </label>
                 <input
                   type="url"
                   [ngModel]="form.instagramUrl ?? ''"
                   (ngModelChange)="form.instagramUrl = $event.trim() || null"
                   name="instagramUrl"
                   placeholder="https://…"
-                  class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
                 />
-              </label>
+              </div>
+              <div class="grid grid-cols-[7.5rem_1fr] items-center gap-3">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="form.showTwitter"
+                    name="showTwitter"
+                    class="rounded border-gray-300"
+                  />
+                  Twitter / X
+                </label>
+                <input
+                  type="url"
+                  [ngModel]="form.twitterUrl ?? ''"
+                  (ngModelChange)="form.twitterUrl = $event.trim() || null"
+                  name="twitterUrl"
+                  placeholder="https://…"
+                  class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+              <div class="grid grid-cols-[7.5rem_1fr] items-center gap-3">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="form.showYoutube"
+                    name="showYoutube"
+                    class="rounded border-gray-300"
+                  />
+                  YouTube
+                </label>
+                <input
+                  type="url"
+                  [ngModel]="form.youtubeUrl ?? ''"
+                  (ngModelChange)="form.youtubeUrl = $event.trim() || null"
+                  name="youtubeUrl"
+                  placeholder="https://…"
+                  class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+              <div class="grid grid-cols-[7.5rem_1fr] items-center gap-3">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="form.showWhatsapp"
+                    name="showWhatsapp"
+                    class="rounded border-gray-300"
+                  />
+                  WhatsApp
+                </label>
+                <input
+                  type="url"
+                  [ngModel]="form.whatsappUrl ?? ''"
+                  (ngModelChange)="form.whatsappUrl = $event.trim() || null"
+                  name="whatsappUrl"
+                  placeholder="https://wa.me/40…"
+                  class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+              <div class="grid grid-cols-[7.5rem_1fr] items-center gap-3">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="form.showTiktok"
+                    name="showTiktok"
+                    class="rounded border-gray-300"
+                  />
+                  TikTok
+                </label>
+                <input
+                  type="url"
+                  [ngModel]="form.tiktokUrl ?? ''"
+                  (ngModelChange)="form.tiktokUrl = $event.trim() || null"
+                  name="tiktokUrl"
+                  placeholder="https://…"
+                  class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                />
+              </div>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+              <button
+                type="button"
+                (click)="saveSocial()"
+                [disabled]="isSaving('social') || !isAdmin()"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style="background-color: #8A0808"
+              >
+                {{ isSaving('social') ? 'Se salvează…' : 'Salvează' }}
+              </button>
             </div>
           </section>
 
@@ -503,24 +644,20 @@ import type { AdminCategory, AdminSettings } from '@civicpress/shared';
                 ></textarea>
               </label>
             </div>
-          </section>
 
-          <div class="flex items-center gap-3">
-            <button
-              type="submit"
-              [disabled]="saving() || !isAdmin()"
-              class="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
-              style="background-color: #8A0808"
-            >
-              {{ saving() ? 'Se salvează…' : 'Salvează' }}
-            </button>
-            @if (!isAdmin()) {
-              <span class="text-xs text-amber-600"
-                >Doar administratorii pot modifica setările.</span
+            <div class="mt-5 flex justify-end">
+              <button
+                type="button"
+                (click)="saveFooterPages()"
+                [disabled]="isSaving('footer') || !isAdmin()"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
+                style="background-color: #8A0808"
               >
-            }
-          </div>
-        </form>
+                {{ isSaving('footer') ? 'Se salvează…' : 'Salvează' }}
+              </button>
+            </div>
+          </section>
+        </div>
       }
     </div>
   `,
@@ -538,68 +675,20 @@ export class SettingsComponent implements OnInit {
   } as const;
 
   loading = signal(true);
-  saving = signal(false);
+  savingSection = signal<string | null>(null);
   savingPseudonyms = signal(false);
   uploadingLogo = signal(false);
-  menuCategories = signal<AdminCategory[]>([]);
+  uploadingMobileLogo = signal(false);
   form: AdminSettings | null = null;
   pseudonyms: string[] = [];
   newPseudonym = '';
 
-  fontWeights = [
-    { value: 400, label: 'Normal (400)' },
-    { value: 500, label: 'Mediu (500)' },
-    { value: 600, label: 'Semibold (600)' },
-    { value: 700, label: 'Bold (700)' },
-    { value: 800, label: 'Extrabold (800)' },
-  ];
-
-  typographyRows: {
-    label: string;
-    hint: string;
-    sizeKey: keyof AdminSettings;
-    weightKey: keyof AdminSettings;
-  }[] = [
-    {
-      label: 'Titluri în liste',
-      hint: 'Titlurile știrilor din liste și pagini de categorii',
-      sizeKey: 'newsTitleFontSize',
-      weightKey: 'newsTitleFontWeight',
-    },
-    {
-      label: 'Sumar în liste',
-      hint: 'Rezumatul știrilor din liste și hero',
-      sizeKey: 'newsSummaryFontSize',
-      weightKey: 'newsSummaryFontWeight',
-    },
-    {
-      label: 'Titlu hero',
-      hint: 'Titlul articolului principal (recomandare)',
-      sizeKey: 'heroTitleFontSize',
-      weightKey: 'heroTitleFontWeight',
-    },
-    {
-      label: 'Titluri sidebar',
-      hint: 'Titlurile articolelor mici din sidebar',
-      sizeKey: 'sidebarTitleFontSize',
-      weightKey: 'sidebarTitleFontWeight',
-    },
-    {
-      label: 'Titlu articol',
-      hint: 'Titlul de pe pagina articolului',
-      sizeKey: 'articleTitleFontSize',
-      weightKey: 'articleTitleFontWeight',
-    },
-    {
-      label: 'Conținut articol',
-      hint: 'Textul articolului',
-      sizeKey: 'articleContentFontSize',
-      weightKey: 'articleContentFontWeight',
-    },
-  ];
-
   isAdmin() {
     return this.auth.user()?.role === 'ADMIN';
+  }
+
+  isSaving(section: string) {
+    return this.savingSection() === section;
   }
 
   setTagline(value: string) {
@@ -609,12 +698,10 @@ export class SettingsComponent implements OnInit {
   ngOnInit() {
     forkJoin({
       settings: this.api.getSettings(),
-      categories: this.api.getCategories(),
       me: this.api.getMe(),
     }).subscribe({
-      next: ({ settings, categories, me }) => {
-        this.form = settings;
-        this.menuCategories.set(categories.filter((cat) => cat.showInMenu));
+      next: ({ settings, me }) => {
+        this.form = this.normalizeSettings(settings);
         this.pseudonyms = [...(me.pseudonyms ?? [])];
         this.loading.set(false);
       },
@@ -625,16 +712,14 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  isMoreCategorySelected(categoryId: string) {
-    return this.form?.headerMoreCategoryIds.includes(categoryId) ?? false;
-  }
-
-  toggleMoreCategory(categoryId: string, checked: boolean) {
-    if (!this.form) return;
-    const next = new Set(this.form.headerMoreCategoryIds);
-    if (checked) next.add(categoryId);
-    else next.delete(categoryId);
-    this.form.headerMoreCategoryIds = Array.from(next);
+  private normalizeSettings(settings: AdminSettings): AdminSettings {
+    return {
+      ...settings,
+      postDateFormat: settings.postDateFormat === 'always-date' ? 'always-date' : 'time-if-today',
+      tickerBgColor: settings.tickerBgColor ?? '#8A0808',
+      tickerTextColor: settings.tickerTextColor ?? '#FFFFFF',
+      tickerFontWeight: settings.tickerFontWeight ?? 600,
+    };
   }
 
   addPseudonym() {
@@ -702,6 +787,36 @@ export class SettingsComponent implements OnInit {
     this.form.logoUrl = null;
   }
 
+  onMobileLogoChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !this.form) return;
+    this.uploadingMobileLogo.set(true);
+    this.api.uploadMedia(file).subscribe({
+      next: (media) => {
+        if (!this.form) {
+          this.uploadingMobileLogo.set(false);
+          return;
+        }
+        this.form.mobileLogoMediaId = media.id;
+        this.form.mobileLogoUrl = media.url;
+        this.uploadingMobileLogo.set(false);
+        this.toast.success('Sigla mobil a fost încărcată.');
+      },
+      error: (e) => {
+        this.uploadingMobileLogo.set(false);
+        this.toast.error(e?.error?.message || 'Încărcarea siglei mobil a eșuat.');
+      },
+    });
+  }
+
+  removeMobileLogo() {
+    if (!this.form) return;
+    this.form.mobileLogoMediaId = null;
+    this.form.mobileLogoUrl = null;
+  }
+
   resetColors() {
     if (!this.form) return;
     this.form.primaryColor = this.defaultColors.primaryColor;
@@ -711,60 +826,86 @@ export class SettingsComponent implements OnInit {
     this.form.textColor = this.defaultColors.textColor;
   }
 
-  save() {
+  saveArticleDisplay() {
     const m = this.form;
     if (!m) return;
-    this.saving.set(true);
-    this.api
-      .updateSettings({
-        siteName: m.siteName,
-        tagline: m.tagline,
-        logoMediaId: m.logoMediaId ?? null,
-        primaryColor: m.primaryColor,
-        secondaryColor: m.secondaryColor,
-        accentColor: m.accentColor,
-        backgroundColor: m.backgroundColor,
-        textColor: m.textColor,
-        headingFont: m.headingFont,
-        bodyFont: m.bodyFont,
-        headerMaxCategories: Number(m.headerMaxCategories),
-        headerShowMoreDropdown: m.headerShowMoreDropdown,
-        headerMoreCategoryIds: m.headerMoreCategoryIds,
-        newsTitleFontSize: Number(m.newsTitleFontSize),
-        newsTitleFontWeight: Number(m.newsTitleFontWeight),
-        newsSummaryFontSize: Number(m.newsSummaryFontSize),
-        newsSummaryFontWeight: Number(m.newsSummaryFontWeight),
-        defaultSummaryRows: Math.max(1, Math.min(8, Math.floor(Number(m.defaultSummaryRows) || 3))),
-        heroTitleFontSize: Number(m.heroTitleFontSize),
-        heroTitleFontWeight: Number(m.heroTitleFontWeight),
-        sidebarTitleFontSize: Number(m.sidebarTitleFontSize),
-        sidebarTitleFontWeight: Number(m.sidebarTitleFontWeight),
-        articleTitleFontSize: Number(m.articleTitleFontSize),
-        articleTitleFontWeight: Number(m.articleTitleFontWeight),
-        articleContentFontSize: Number(m.articleContentFontSize),
-        articleContentFontWeight: Number(m.articleContentFontWeight),
-        showArticleViews: m.showArticleViews,
-        facebookUrl: m.facebookUrl,
-        twitterUrl: m.twitterUrl,
-        youtubeUrl: m.youtubeUrl,
-        instagramUrl: m.instagramUrl,
-        footerHtml: m.footerHtml,
-        footerContactInfo: m.footerContactInfo,
-        contactPageHtml: m.contactPageHtml,
-        termsPageHtml: m.termsPageHtml,
-        privacyPageHtml: m.privacyPageHtml,
-        cookiePageHtml: m.cookiePageHtml,
-      })
-      .subscribe({
-        next: (s) => {
-          this.form = s;
-          this.saving.set(false);
-          this.toast.success('Setări salvate.');
-        },
-        error: () => {
-          this.saving.set(false);
-          this.toast.error('Salvarea a eșuat.');
-        },
-      });
+    this.saveSection('articleDisplay', {
+      showArticleViews: m.showArticleViews,
+      postDateFormat: m.postDateFormat === 'always-date' ? 'always-date' : 'time-if-today',
+      defaultSummaryRows: Math.max(1, Math.floor(Number(m.defaultSummaryRows) || 3)),
+    });
+  }
+
+  saveIdentity() {
+    const m = this.form;
+    if (!m) return;
+    this.saveSection('identity', {
+      siteName: m.siteName,
+      tagline: m.tagline,
+      logoMediaId: m.logoMediaId ?? null,
+      mobileLogoMediaId: m.mobileLogoMediaId ?? null,
+    });
+  }
+
+  saveColors() {
+    const m = this.form;
+    if (!m) return;
+    this.saveSection('colors', {
+      primaryColor: m.primaryColor,
+      secondaryColor: m.secondaryColor,
+      accentColor: m.accentColor,
+      backgroundColor: m.backgroundColor,
+      textColor: m.textColor,
+    });
+  }
+
+  saveSocial() {
+    const m = this.form;
+    if (!m) return;
+    this.saveSection('social', {
+      facebookUrl: m.facebookUrl,
+      twitterUrl: m.twitterUrl,
+      youtubeUrl: m.youtubeUrl,
+      instagramUrl: m.instagramUrl,
+      whatsappUrl: m.whatsappUrl,
+      tiktokUrl: m.tiktokUrl,
+      showFacebook: m.showFacebook,
+      showTwitter: m.showTwitter,
+      showYoutube: m.showYoutube,
+      showInstagram: m.showInstagram,
+      showWhatsapp: m.showWhatsapp,
+      showTiktok: m.showTiktok,
+      showSocialInHeader: m.showSocialInHeader,
+      showSocialInMobileMenu: m.showSocialInMobileMenu,
+      showSocialInFooter: m.showSocialInFooter,
+    });
+  }
+
+  saveFooterPages() {
+    const m = this.form;
+    if (!m) return;
+    this.saveSection('footer', {
+      footerContactInfo: m.footerContactInfo,
+      contactPageHtml: m.contactPageHtml,
+      termsPageHtml: m.termsPageHtml,
+      privacyPageHtml: m.privacyPageHtml,
+      cookiePageHtml: m.cookiePageHtml,
+    });
+  }
+
+  private saveSection(section: string, payload: SettingsUpdate) {
+    if (this.savingSection() || !this.isAdmin()) return;
+    this.savingSection.set(section);
+    this.api.updateSettings(payload).subscribe({
+      next: (s) => {
+        this.form = this.normalizeSettings(s);
+        this.savingSection.set(null);
+        this.toast.success('Setări salvate.');
+      },
+      error: () => {
+        this.savingSection.set(null);
+        this.toast.error('Salvarea a eșuat.');
+      },
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { createError, getQuery } from 'h3';
+import { getQuery } from 'h3';
 import type { H3Event } from 'h3';
 import type { CategoryDetail } from '@civicpress/shared';
 
@@ -22,6 +22,6 @@ export const load = async ({
     );
     return { category };
   } catch {
-    throw createError({ statusCode: 404, statusMessage: 'Categoria nu a fost găsită' });
+    return { category: null };
   }
 };

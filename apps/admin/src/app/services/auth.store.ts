@@ -1,7 +1,12 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import type { Me } from '@civicpress/shared';
+import {
+  canManageSiteStructure,
+  canViewAnalytics as roleCanViewAnalytics,
+  isEditorialRole,
+  type Me,
+} from '@civicpress/shared';
 
 const API = '/v1';
 
@@ -13,11 +18,13 @@ export class AuthStore {
   user = this._user.asReadonly();
   loading = this._loading.asReadonly();
   isLoggedIn = computed(() => this._user() !== null);
-  isEditor = computed(() => {
-    const role = this._user()?.role;
-    return role === 'EDITOR' || role === 'ADMIN';
-  });
+  isEditor = computed(() => isEditorialRole(this._user()?.role));
   isAdmin = computed(() => this._user()?.role === 'ADMIN');
+  canManageCategories = computed(() => canManageSiteStructure(this._user()?.role));
+  canManageLayouts = computed(() => canManageSiteStructure(this._user()?.role));
+  canViewSettings = computed(() => canManageSiteStructure(this._user()?.role));
+  canManagePills = computed(() => isEditorialRole(this._user()?.role));
+  canViewAnalytics = computed(() => roleCanViewAnalytics(this._user()?.role));
 
   constructor(private http: HttpClient) {}
 

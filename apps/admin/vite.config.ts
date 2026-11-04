@@ -14,7 +14,7 @@ export default defineConfig({
     allowedHosts: ['civic_admin', 'civicpress.ro', '.civicpress.ro'],
     proxy: {
       '/v1': {
-        target: 'http://localhost:3000',
+        target: process.env.API_PROXY || 'http://localhost:3000',
         changeOrigin: true,
       },
     },

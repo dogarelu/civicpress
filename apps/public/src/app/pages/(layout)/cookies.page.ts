@@ -1,6 +1,7 @@
-import { Component, computed } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { injectLoad, type PageServerLoad } from '@analogjs/router';
+import { SeoService } from '../../services/seo.service';
 
 type CookiePolicyLoad = (args: PageServerLoad) => Promise<{ contentHtml: string }>;
 
@@ -14,8 +15,18 @@ type CookiePolicyLoad = (args: PageServerLoad) => Promise<{ contentHtml: string 
     </main>
   `,
 })
-export default class CookiePolicyPageComponent {
+export default class CookiePolicyPageComponent implements OnInit {
+  private seo = inject(SeoService);
   private loadData = toSignal(injectLoad<CookiePolicyLoad>());
+
+  ngOnInit() {
+    this.seo.applyStatic({
+      path: '/cookies',
+      title: 'Politica Cookie',
+      description: 'Politica de utilizare a cookie-urilor pe Civicpress.',
+    });
+  }
+
   contentHtml = computed(
     () =>
       this.loadData()?.contentHtml ||

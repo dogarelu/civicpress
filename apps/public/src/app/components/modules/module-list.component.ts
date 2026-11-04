@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { HomeListItemComponent } from '../home-list-item.component';
-import type { ModuleTypography, ResolvedModule } from '@civicpress/shared';
+import type { ModuleTypography, PostDateFormat, ResolvedModule } from '@civicpress/shared';
 
 /** Module: vertical list of articles. */
 @Component({
@@ -17,6 +17,9 @@ import type { ModuleTypography, ResolvedModule } from '@civicpress/shared';
           [showAuthor]="item.showAuthor"
           [showCategory]="showCategory"
           [showSummary]="showSummary"
+          [showBumbi]="showBumbi"
+          [dateFormat]="dateFormat"
+          [showReadingTime]="showReadingTime"
           [typography]="typography"
           imageSize="wide"
         />
@@ -43,5 +46,8 @@ export class ModuleListComponent {
   @Input() typography: ModuleTypography | null = null;
   @Input() showCategory = true;
   @Input() showSummary = true;
+  @Input() showBumbi: boolean | null = null;
+  @Input() dateFormat: PostDateFormat | null = null;
+  @Input() showReadingTime = false;
   @Output() loadMore = new EventEmitter<void>();
 }

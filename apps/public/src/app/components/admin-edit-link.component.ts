@@ -42,7 +42,7 @@ export class AdminEditLinkComponent implements OnInit {
   private adminSession = inject(AdminSessionService);
   private platformId = inject(PLATFORM_ID);
 
-  show = computed(() => !!this.postId && this.adminSession.isAdmin());
+  show = computed(() => !!this.postId && this.adminSession.canEditPosts());
 
   ngOnInit(): void {
     if (isPlatformBrowser(this.platformId)) {

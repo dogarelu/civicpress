@@ -2,6 +2,8 @@ import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
 import { adminGuard } from './guards/admin.guard';
 import { editorGuard } from './guards/editor.guard';
+import { editorialGuard } from './guards/editorial.guard';
+import { chiefEditorGuard } from './guards/chief-editor.guard';
 
 export const routes: Routes = [
   {
@@ -25,9 +27,19 @@ export const routes: Routes = [
           import('./pages/dashboard.component').then((m) => m.DashboardComponent),
       },
       {
+        path: 'analytics',
+        canActivate: [chiefEditorGuard],
+        loadComponent: () =>
+          import('./pages/analytics.component').then((m) => m.AnalyticsComponent),
+      },
+      {
         path: 'posts',
         loadComponent: () =>
           import('./pages/posts/posts-list.component').then((m) => m.PostsListComponent),
+      },
+      {
+        path: 'trash',
+        loadComponent: () => import('./pages/posts/trash.component').then((m) => m.TrashComponent),
       },
       {
         path: 'posts/new',
@@ -49,7 +61,7 @@ export const routes: Routes = [
       },
       {
         path: 'pills',
-        canActivate: [editorGuard],
+        canActivate: [editorialGuard],
         loadComponent: () =>
           import('./pages/pills/pills-list.component').then((m) => m.PillsListComponent),
       },

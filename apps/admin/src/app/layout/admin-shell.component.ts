@@ -53,6 +53,23 @@ import { ToastService } from '../services/toast.service';
             </svg>
             Dashboard
           </a>
+          @if (auth.canViewAnalytics()) {
+            <a
+              routerLink="/analytics"
+              routerLinkActive="bg-gray-700 text-white"
+              class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              Analiză
+            </a>
+          }
           <a
             routerLink="/posts"
             routerLinkActive="bg-gray-700 text-white"
@@ -69,7 +86,22 @@ import { ToastService } from '../services/toast.service';
             </svg>
             Articole
           </a>
-          @if (auth.isEditor()) {
+          <a
+            routerLink="/trash"
+            routerLinkActive="bg-gray-700 text-white"
+            class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+            Coș
+          </a>
+          @if (auth.canManageCategories()) {
             <a
               routerLink="/categories"
               routerLinkActive="bg-gray-700 text-white"
@@ -85,6 +117,8 @@ import { ToastService } from '../services/toast.service';
               </svg>
               Categorii
             </a>
+          }
+          @if (auth.canManagePills()) {
             <a
               routerLink="/pills"
               routerLinkActive="bg-gray-700 text-white"
@@ -100,6 +134,8 @@ import { ToastService } from '../services/toast.service';
               </svg>
               Pill-uri
             </a>
+          }
+          @if (auth.canManageLayouts()) {
             <a
               routerLink="/layouts"
               routerLinkActive="bg-gray-700 text-white"
@@ -148,7 +184,7 @@ import { ToastService } from '../services/toast.service';
             </svg>
             Jurnal activitate
           </a>
-          @if (auth.isEditor()) {
+          @if (auth.canViewSettings()) {
             <a
               routerLink="/settings"
               routerLinkActive="bg-gray-700 text-white"
@@ -196,9 +232,10 @@ import { ToastService } from '../services/toast.service';
               <span
                 class="inline-block mt-1 px-2 py-0.5 text-xs rounded-full font-medium"
                 [class.bg-red-700]="user()!.role === 'ADMIN'"
+                [class.bg-purple-700]="user()!.role === 'CHIEF_EDITOR'"
                 [class.bg-blue-700]="user()!.role === 'EDITOR'"
                 [class.bg-gray-600]="user()!.role === 'AUTHOR'"
-                >{{ user()!.role }}</span
+                >{{ roleLabel(user()!.role) }}</span
               >
             </div>
           }
@@ -234,5 +271,13 @@ export class AdminShellComponent implements OnInit {
   async logout() {
     await this.authStore.logout();
     this.router.navigate(['/login']);
+  }
+
+  roleLabel(role: string) {
+    if (role === 'CHIEF_EDITOR') return 'Editor șef';
+    if (role === 'AUTHOR') return 'Autor';
+    if (role === 'EDITOR') return 'Editor';
+    if (role === 'ADMIN') return 'Admin';
+    return role;
   }
 }

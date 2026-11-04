@@ -2,12 +2,14 @@ import { Component, Input, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { injectRouter } from '@analogjs/router';
 import { BreadcrumbComponent } from '../../components/breadcrumb.component';
+import { PostSubtitleComponent } from '../../components/post-subtitle.component';
+import { VideoPlayBadgeComponent } from '../../components/video-play-badge.component';
 import type { CategoryDetail } from '@civicpress/shared';
 
 @Component({
   selector: 'cp-cat-video',
   standalone: true,
-  imports: [RouterModule, BreadcrumbComponent],
+  imports: [RouterModule, BreadcrumbComponent, PostSubtitleComponent, VideoPlayBadgeComponent],
   template: `
     @if (data) {
       <cp-breadcrumb [items]="[{ label: data.name }]" />
@@ -34,18 +36,7 @@ import type { CategoryDetail } from '@civicpress/shared';
               <div
                 class="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors"
               ></div>
-              <span
-                class="absolute inset-0 m-auto w-12 h-12 rounded-full bg-white/90 text-gray-900 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform"
-              >
-                <svg
-                  class="w-6 h-6 ml-0.5"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </span>
+              <cp-video-play-badge size="md" />
             </a>
 
             <div class="p-3">
@@ -60,14 +51,13 @@ import type { CategoryDetail } from '@civicpress/shared';
                   {{ post.title }}
                 </a>
               </h2>
-              @if (post.excerpt) {
-                <p
-                  class="text-gray-600 line-clamp-2 mt-1"
-                  style="font-size: var(--news-summary-font-size, 13px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, currentColor);"
-                >
-                  {{ cleanExcerpt(post.excerpt) }}
-                </p>
-              }
+              <cp-post-subtitle
+                [show]="true"
+                [bulbi]="post.bulbi ?? []"
+                [excerpt]="post.excerpt"
+                listClass="text-gray-600 mt-1"
+                textClass="text-gray-600 mt-1"
+              />
             </div>
           </article>
         }
@@ -134,9 +124,5 @@ export default class CatVideoComponent {
     const range: number[] = [];
     for (let i = Math.max(1, current - 2); i <= Math.min(total, current + 2); i++) range.push(i);
     return range;
-  }
-
-  cleanExcerpt(excerpt: string): string {
-    return excerpt.replace(/<[^>]*>/g, '').trim();
   }
 }

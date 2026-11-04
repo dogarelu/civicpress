@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { ExchangeRate, ExchangeRatesResponse } from '@civicpress/shared';
 
-const BNR_URL = 'https://www.bnr.ro/nbrfxrates.xml';
+const BNR_URL = 'https://curs.bnr.ro/nbrfxrates.xml';
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour — BNR publishes once daily
 
 /** Top 10 currencies shown in the header ticker, in display order. */

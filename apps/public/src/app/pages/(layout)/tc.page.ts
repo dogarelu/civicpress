@@ -1,6 +1,7 @@
-import { Component, computed } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { injectLoad, type PageServerLoad } from '@analogjs/router';
+import { SeoService } from '../../services/seo.service';
 
 type TermsLoad = (args: PageServerLoad) => Promise<{ contentHtml: string }>;
 
@@ -14,8 +15,18 @@ type TermsLoad = (args: PageServerLoad) => Promise<{ contentHtml: string }>;
     </main>
   `,
 })
-export default class TermsPageComponent {
+export default class TermsPageComponent implements OnInit {
+  private seo = inject(SeoService);
   private loadData = toSignal(injectLoad<TermsLoad>());
+
+  ngOnInit() {
+    this.seo.applyStatic({
+      path: '/tc',
+      title: 'Termeni și condiții',
+      description: 'Termenii și condițiile de utilizare ale site-ului Civicpress.',
+    });
+  }
+
   contentHtml = computed(
     () =>
       this.loadData()?.contentHtml ||

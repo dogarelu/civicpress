@@ -24,6 +24,469 @@
   --article-title-font-weight: 700;
   --article-content-font-size: 17px;
   --article-content-font-weight: 400;
+  --article-content-line-height: 1.7;
+  --pill-font-size: 12px;
+  --pill-bg-opacity: 1;
+  --pill-top: 0.5rem;
+  --pill-right: 0.5rem;
+  --pill-bottom: auto;
+  --pill-left: auto;
+  --pill-align-items: flex-end;
+  /* Reference image width where --pill-font-size applies 1:1 */
+  --pill-ref-width: 360px;
+}
+
+/*
+ * Pills host: fills the relative image frame and acts as the size container
+ * so badges scale with the image width (cqw) without editing every template.
+ */
+.cp-pill-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+  container-type: inline-size;
+  container-name: pill-frame;
+}
+
+/*
+ * Pill badge: scales with image width via container queries.
+ * Global --pill-font-size is the size at --pill-ref-width (360px).
+ * data-size sm/md/lg is a light multiplier on top of that (layout context).
+ * data-rel-size smaller/default/bigger is a per-article multiplier on that default.
+ */
+.cp-image-pill {
+  --pill-size-scale: 1;
+  --pill-rel-scale: 1;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  line-height: 1.2;
+  pointer-events: none;
+  border-radius: clamp(2px, 0.6cqw, 4px);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  /* (100cqw / ref) is unitless; times global px keeps global control */
+  font-size: clamp(
+    8px,
+    calc(
+      var(--pill-font-size) * var(--pill-size-scale) * var(--pill-rel-scale) * 100cqw /
+        var(--pill-ref-width)
+    ),
+    calc(var(--pill-font-size) * var(--pill-size-scale) * var(--pill-rel-scale) * 1.25)
+  );
+  padding: clamp(1px, 0.35cqw, 4px) clamp(3px, 1.1cqw, 12px);
+}
+
+.cp-image-pill[data-size='sm'] {
+  --pill-size-scale: 0.85;
+}
+
+.cp-image-pill[data-size='lg'] {
+  --pill-size-scale: 1.1;
+}
+
+.cp-image-pill[data-rel-size='smaller'] {
+  --pill-rel-scale: 0.85;
+}
+
+.cp-image-pill[data-rel-size='bigger'] {
+  --pill-rel-scale: 1.2;
+}
+
+/*
+ * Per-module / sidebar-block background override.
+ * Breaks out of the content shell padding (p-4 / md:p-6) and absorbs
+ * adjacent space-y gaps so the fill covers the full section band.
+ */
+/* Boxed section titles (sidebar "Cele mai citite", Ultimele știri, etc.). */
+.cp-row-header-bar {
+  background-color: var(--row-header-bg, var(--category-color, #f3f4f6));
+  text-align: center;
+}
+
+/* Main-column module / category titles. Default: cutout + underline.
+ * When typography sets --row-header-bg, the label becomes a boxed chip. */
+.cp-module-section-title-text {
+  position: relative;
+  z-index: 10;
+  display: inline-block;
+  padding: var(--row-header-py, 0) var(--row-header-px, 0.75rem);
+  background-color: var(--row-header-bg, var(--color-background, #ffffff));
+}
+
+.cp-module-section-title-rule {
+  display: var(--row-header-rule, block);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background-color: #d1d5db;
+}
+
+/* Category-scoped module title: category.color, then typography pill, then title bg. */
+.cp-module-section-title--cat-pill .cp-module-section-title-text {
+  color: var(--hero-category-color, var(--module-category-color, inherit));
+  background-color: var(
+    --row-header-bg,
+    var(
+      --hero-category-bg,
+      var(--module-category-bg, var(--category-color, var(--color-background, #ffffff)))
+    )
+  );
+  padding: var(--row-header-py, var(--hero-category-py, var(--module-category-py, 0.4em)))
+    var(--row-header-px, var(--hero-category-px, var(--module-category-px, 0.75em)));
+  border-radius: var(--hero-category-radius, var(--module-category-radius, 0.25rem));
+  letter-spacing: 0.04em;
+}
+
+.cp-module-section-title--cat-pill .cp-module-section-title-rule {
+  display: none;
+}
+
+.cp-module-bg {
+  background-color: var(--module-bg);
+  --color-background: var(--module-bg);
+  box-sizing: border-box;
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding: 1.25rem 1rem;
+}
+
+@media (min-width: 768px) {
+  .cp-module-bg {
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    padding: 1.5rem;
+  }
+}
+
+/*
+ * Right column: keep text inset from the module fill. The -1.5rem left bleed
+ * is for the card padding, not the inner grid edge. In lg:grid-cols-4 the
+ * main column uses the same bleed; a 1rem gutter lets it overshoot 8px into
+ * this column. Inset the bar, and clip leftover overflow so sticky fill can
+ * never paint over the main modules.
+ */
+cp-layout-sidebar .cp-module-bg {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 1024px) {
+  cp-layout-sidebar .cp-module-bg {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Sticky paints above the main column; clip leftover left overflow (bg/shadow). */
+  cp-layout-sidebar .cp-sidebar-sticky {
+    clip-path: inset(0 -1.5rem 0 0);
+  }
+}
+
+/* space-y-7 (1.75rem) — desktop main-column module stack */
+.space-y-7 > .cp-module-bg:not(:last-child) {
+  padding-bottom: calc(1.25rem + 1.75rem);
+  margin-bottom: -1.75rem;
+}
+
+.space-y-7 > :not([hidden]) ~ .cp-module-bg {
+  margin-top: 0;
+  padding-top: calc(1.25rem + 1.75rem);
+}
+
+@media (min-width: 768px) {
+  .space-y-7 > .cp-module-bg:not(:last-child) {
+    padding-bottom: calc(1.5rem + 1.75rem);
+  }
+
+  .space-y-7 > :not([hidden]) ~ .cp-module-bg {
+    padding-top: calc(1.5rem + 1.75rem);
+  }
+}
+
+/* space-y-6 (1.5rem) — layout sections, mobile modules, sidebar */
+.space-y-6 > .cp-module-bg:not(:last-child) {
+  padding-bottom: calc(1.25rem + 1.5rem);
+  margin-bottom: -1.5rem;
+}
+
+.space-y-6 > :not([hidden]) ~ .cp-module-bg {
+  margin-top: 0;
+  padding-top: calc(1.25rem + 1.5rem);
+}
+
+@media (min-width: 768px) {
+  .space-y-6 > .cp-module-bg:not(:last-child) {
+    padding-bottom: calc(1.5rem + 1.5rem);
+  }
+
+  .space-y-6 > :not([hidden]) ~ .cp-module-bg {
+    padding-top: calc(1.5rem + 1.5rem);
+  }
+}
+
+/* Line between sidebar modules, inset so sticky clip-path cannot hide it. */
+cp-layout-sidebar .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  padding-top: 1.25rem;
+  box-shadow: 0 -1px 0 #9ca3af;
+}
+
+/* Flush gap → sticky segment (not wrapped in the same space-y-6). */
+cp-layout-sidebar .cp-sb-rule-top {
+  box-shadow: 0 -1px 0 #9ca3af;
+}
+
+/* Latest-news stream: each article is its own unit for height fitting.
+ * Collapse the 24px stack gap and draw the same gray-400 list rule. */
+cp-layout-sidebar .space-y-6 > .cp-sb-latest + .cp-sb-latest {
+  margin-top: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid transparent;
+  box-shadow: 0 -1px 0 #9ca3af;
+}
+
+/*
+ * Chrome (and other Chromium browsers) snap 1px borders / gaps / h-px rules
+ * to the device-pixel grid. At zoom-out (90/80/67/50%) or unlucky subpixel
+ * positions, some of those hairlines round to 0 coverage and vanish.
+ * box-shadow is painted on a different path and stays visible.
+ */
+.gap-px.bg-gray-400 {
+  gap: 0;
+  background-color: transparent;
+  overflow: hidden;
+  /* Same gutter as coloane categorii (md:px-4): horizontals stay article-wide. */
+  --cp-rule-inset: 1rem;
+}
+
+.gap-px.bg-gray-400 > * {
+  position: relative;
+  box-shadow: -1px 0 0 #9ca3af;
+}
+
+.gap-px.bg-gray-400 > *::before {
+  content: '';
+  position: absolute;
+  /* Sit just above the cell so the first row is clipped by overflow:hidden;
+   * later rows show an article-wide rule that stops short of the verticals. */
+  top: -1px;
+  left: var(--cp-rule-inset);
+  right: var(--cp-rule-inset);
+  height: 1px;
+  background-color: #9ca3af;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.h-px.bg-gray-400,
+.h-px.bg-black {
+  height: 0;
+  background-color: transparent;
+}
+
+.h-px.bg-gray-400 {
+  box-shadow: 0 1px 0 #9ca3af;
+}
+
+/* Between modules / row-lines: real 1px rule with space on both sides. */
+.cp-stack-rule {
+  display: block;
+  padding-top: 1.25rem;
+  padding-bottom: 1.25rem;
+}
+
+.cp-stack-rule::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 1px;
+  background-color: #9ca3af;
+  box-shadow: 0 1px 0 #9ca3af;
+}
+
+.h-px.bg-black {
+  box-shadow: 0 1px 0 #000;
+}
+
+.divide-gray-400 > :not([hidden]) ~ :not([hidden]) {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  box-shadow: 0 -1px 0 #9ca3af;
+}
+
+.divide-border > :not([hidden]) ~ :not([hidden]) {
+  border-top-color: transparent;
+  border-bottom-color: transparent;
+  box-shadow: 0 -1px 0 #c4c4c4;
+}
+
+.border-t.border-gray-400 {
+  border-top-color: transparent;
+  box-shadow: 0 -1px 0 #9ca3af;
+}
+
+.border-b.border-gray-400 {
+  border-bottom-color: transparent;
+  box-shadow: 0 1px 0 #9ca3af;
+}
+
+.border-t.border-border {
+  border-top-color: transparent;
+  box-shadow: 0 -1px 0 #c4c4c4;
+}
+
+.border-b.border-border {
+  border-bottom-color: transparent;
+  box-shadow: 0 1px 0 #c4c4c4;
+}
+
+.border-l.border-gray-400 {
+  border-left-color: transparent;
+  box-shadow: -1px 0 0 #9ca3af;
+}
+
+.border-r.border-gray-400 {
+  border-right-color: transparent;
+  box-shadow: 1px 0 0 #9ca3af;
+}
+
+.last\:border-0:last-child,
+.last\:border-b-0:last-child,
+.last\:border-r-0:last-child {
+  box-shadow: none;
+}
+
+@media (min-width: 768px) {
+  .border-t.border-gray-400.md\:border-t-0,
+  .border-b.border-gray-400.md\:border-b-0 {
+    box-shadow: none;
+  }
+
+  .md\:border-l.md\:border-gray-400,
+  .md\:border-l.border-gray-400,
+  .border-t.border-gray-400.md\:border-t-0.md\:border-l.md\:border-gray-400,
+  .border-b.border-gray-400.md\:border-b-0.md\:border-l.md\:border-gray-400 {
+    border-left-color: transparent;
+    box-shadow: -1px 0 0 #9ca3af;
+  }
+
+  .md\:border-r.md\:border-gray-400,
+  .md\:border-r.border-gray-400,
+  .border-t.border-gray-400.md\:border-t-0.md\:border-r.md\:border-gray-400 {
+    border-right-color: transparent;
+    box-shadow: 1px 0 0 #9ca3af;
+  }
+}
+
+/*
+ * Per-article category label in modules.
+ * When typography sets display:pill, --*-bg / --*-py / --*-px / --*-radius are filled;
+ * plain mode leaves those at transparent/0 so it stays text-only.
+ */
+.cp-category-label {
+  display: inline-block;
+  max-width: 100%;
+  font-size: var(--module-category-font-size, 12px);
+  font-weight: var(--module-category-font-weight, 700);
+  color: var(--module-category-color, #6b7280);
+  background-color: var(--module-category-bg, transparent);
+  padding: var(--module-category-py, 0) var(--module-category-px, 0);
+  border-radius: var(--module-category-radius, 0);
+  line-height: 1.25;
+  text-decoration: none;
+  vertical-align: baseline;
+  transition: opacity 0.15s ease;
+}
+
+.cp-category-label:hover {
+  opacity: 0.85;
+}
+
+.cp-category-label--hero {
+  font-size: var(--hero-category-font-size, var(--module-category-font-size, 14px));
+  font-weight: var(--hero-category-font-weight, var(--module-category-font-weight, 700));
+  color: var(--hero-category-color, var(--module-category-color, #6b7280));
+  background-color: var(--hero-category-bg, var(--module-category-bg, transparent));
+  padding: var(--hero-category-py, var(--module-category-py, 0))
+    var(--hero-category-px, var(--module-category-px, 0));
+  border-radius: var(--hero-category-radius, var(--module-category-radius, 0));
+}
+
+/* Dark image overlays: white when typography color is unset. */
+.cp-category-label--on-image {
+  color: var(--hero-category-color, var(--module-category-color, #ffffff));
+}
+
+.cp-image-pill--floating {
+  position: absolute;
+  z-index: 10;
+  --pill-inset: clamp(0.15rem, 1.5cqw, 0.75rem);
+}
+
+.cp-image-pill--floating[data-corner='top-left'] {
+  top: var(--pill-inset);
+  left: var(--pill-inset);
+  right: auto;
+  bottom: auto;
+}
+
+.cp-image-pill--floating[data-corner='top-right'] {
+  top: var(--pill-inset);
+  right: var(--pill-inset);
+  left: auto;
+  bottom: auto;
+}
+
+.cp-image-pill--floating[data-corner='bottom-left'] {
+  bottom: var(--pill-inset);
+  left: var(--pill-inset);
+  top: auto;
+  right: auto;
+}
+
+.cp-image-pill--floating[data-corner='bottom-right'] {
+  bottom: var(--pill-inset);
+  right: var(--pill-inset);
+  top: auto;
+  left: auto;
+}
+
+html[data-pill-corner='top-left'] {
+  --pill-top: 0.5rem;
+  --pill-right: auto;
+  --pill-bottom: auto;
+  --pill-left: 0.5rem;
+  --pill-align-items: flex-start;
+}
+
+html[data-pill-corner='top-right'] {
+  --pill-top: 0.5rem;
+  --pill-right: 0.5rem;
+  --pill-bottom: auto;
+  --pill-left: auto;
+  --pill-align-items: flex-end;
+}
+
+html[data-pill-corner='bottom-left'] {
+  --pill-top: auto;
+  --pill-right: auto;
+  --pill-bottom: 0.5rem;
+  --pill-left: 0.5rem;
+  --pill-align-items: flex-start;
+}
+
+html[data-pill-corner='bottom-right'] {
+  --pill-top: auto;
+  --pill-right: 0.5rem;
+  --pill-bottom: 0.5rem;
+  --pill-left: auto;
+  --pill-align-items: flex-end;
 }
 
 * {
@@ -33,7 +496,7 @@
 body {
   font-family: var(--font-body);
   color: var(--color-text);
-  background-color: #f7f7f7;
+  background-color: var(--color-background);
   margin: 0;
   padding: 0;
 }
@@ -62,13 +525,12 @@ img {
 }
 
 /*
- * On wide screens, narrow the page content (not the top menu/header) so a
- * vertical ad (e.g. 160x600 skyscraper) fits in the free space on each side.
- * Reserves ~200px per side; content never exceeds 1280px.
+ * On wide screens, leave room for a vertical ad on each side without
+ * squeezing the main + sidebar columns. Content never exceeds 1400px.
  */
 @media (min-width: 1400px) {
   .page-container {
-    max-width: min(1280px, calc(100vw - 2 * 200px));
+    max-width: min(1400px, calc(100vw - 2 * 160px));
   }
 }
 
@@ -87,6 +549,15 @@ img {
   -webkit-box-orient: vertical;
   overflow: hidden;
   -webkit-line-clamp: var(--news-summary-line-clamp, 3);
+}
+
+.cp-bumbi-list > li {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: visible;
+  white-space: normal;
 }
 
 /* Right-column video title line clamp. */
@@ -109,9 +580,190 @@ img {
   margin: 1rem 0;
 }
 
+.article-content img[data-size='small'] {
+  width: 40% !important;
+  max-width: 40% !important;
+}
+
+.article-content img[data-size='medium'] {
+  width: 70% !important;
+  max-width: 70% !important;
+}
+
+.article-content img[data-size='full'] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.article-content img[data-align='left'] {
+  display: block;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.article-content img[data-align='center'] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.article-content img[data-align='right'] {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.article-content .cp-article-photo {
+  display: block;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.article-content .cp-article-photo[data-size='small'],
+.article-content .cp-article-photo--small {
+  width: 40% !important;
+  max-width: 40% !important;
+}
+
+.article-content .cp-article-photo[data-size='medium'],
+.article-content .cp-article-photo--medium {
+  width: 70% !important;
+  max-width: 70% !important;
+}
+
+.article-content .cp-article-photo[data-size='full'],
+.article-content .cp-article-photo--full {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.article-content .cp-article-photo[data-align='left'],
+.article-content .cp-article-photo--left {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.article-content .cp-article-photo[data-align='center'],
+.article-content .cp-article-photo--center {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.article-content .cp-article-photo[data-align='right'],
+.article-content .cp-article-photo--right {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+.article-content .cp-article-photo img {
+  display: block;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto;
+  margin: 0;
+}
+
+.article-content .cp-article-video {
+  display: block;
+  max-width: 100%;
+  margin: 1rem 0;
+}
+
+.article-content .cp-article-video[data-size='small'] {
+  width: 40% !important;
+  max-width: 40% !important;
+}
+
+.article-content .cp-article-video[data-size='medium'] {
+  width: 70% !important;
+  max-width: 70% !important;
+}
+
+.article-content .cp-article-video[data-size='full'] {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.article-content .cp-article-video[data-align='left'] {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.article-content .cp-article-video[data-align='center'] {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.article-content .cp-article-video[data-align='right'] {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
+.article-content .cp-article-video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #111;
+  overflow: hidden;
+}
+
+.article-content .cp-article-video-frame iframe,
+.article-content .cp-article-video-frame video {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  border: 0;
+  display: block;
+  background: #000;
+}
+
+.article-content .cp-article-video-frame video {
+  object-fit: contain;
+}
+
+.article-content .cp-article-video .cp-article-photo-caption {
+  margin: 0.4rem 0 0;
+}
+
+.cp-article-photo-caption {
+  display: block;
+  margin-top: 0.4rem;
+  text-align: left;
+  font-size: var(--article-photo-caption-font-size, 13px);
+  font-weight: var(--article-photo-caption-font-weight, 400);
+  color: var(--article-photo-caption-color, #6b7280);
+  line-height: var(--article-photo-caption-line-height, 1.4);
+}
+
+.article-content [style*='text-align: center'] img,
+.article-content [style*='text-align:center'] img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.article-content [style*='text-align: right'] img,
+.article-content [style*='text-align:right'] img {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
 .article-content p {
-  line-height: 1.7;
+  line-height: var(--article-content-line-height, 1.7);
   margin-bottom: 1rem;
+}
+
+.article-content li {
+  display: list-item;
+  line-height: var(--article-content-line-height, 1.7);
+}
+
+.article-content li > p {
+  margin-bottom: 0.25rem;
 }
 
 .article-content h2,
@@ -121,8 +773,25 @@ img {
 
 .article-content ul,
 .article-content ol {
+  margin: 0.75rem 0 1rem;
   padding-left: 1.5rem;
-  margin-bottom: 1rem;
+}
+
+/* Tailwind preflight sets list-style: none on ul/ol. Restore markers in articles. */
+.article-content ul {
+  list-style: disc outside;
+}
+
+.article-content ol {
+  list-style: decimal outside;
+}
+
+.article-content ul ul {
+  list-style-type: circle;
+}
+
+.article-content ol ol {
+  list-style-type: lower-alpha;
 }
 
 .article-content blockquote {
@@ -133,50 +802,45 @@ img {
   color: #555;
 }
 
-/* Exchange rate ticker — continuous horizontal scroll */
-.exchange-ticker {
-  height: 28px;
-  display: flex;
-  align-items: center;
-  background-color: var(--color-primary, #8a0808);
+.article-content .cp-article-ref {
+  margin: 1.25rem 0;
 }
 
-.exchange-ticker--embedded {
-  height: 100%;
-  background-color: transparent;
+.article-content .cp-article-ref-line {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
 }
 
-.exchange-ticker-track {
-  display: inline-flex;
-  align-items: center;
-  gap: 2.5rem;
-  white-space: nowrap;
-  animation: exchange-ticker-scroll 45s linear infinite;
-  will-change: transform;
+.article-content .cp-article-ref-link {
+  color: var(--color-accent, #c0392b);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.exchange-ticker-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
+.article-content .cp-article-ref-link:hover {
+  color: var(--color-accent, #c0392b);
 }
 
-@keyframes exchange-ticker-scroll {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(-50%);
-  }
+.article-content .cp-article-ref-missing {
+  font-weight: 600;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .exchange-ticker-track {
-    animation: none;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 1rem;
-    padding: 0 1rem;
-  }
+.article-content .cp-article-ref-image {
+  display: block;
+  width: min(100%, 420px);
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+}
+
+.article-content .cp-article-frame {
+  margin: 1rem 0;
+}
+
+.article-content .cp-article-frame > :first-child {
+  margin-top: 0;
+}
+
+.article-content .cp-article-frame > :last-child {
+  margin-bottom: 0;
 }

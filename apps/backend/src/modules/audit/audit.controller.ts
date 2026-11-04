@@ -1,6 +1,7 @@
 import { Controller, Get, Query, ForbiddenException } from '@nestjs/common';
 import { AuditService } from './audit.service';
 import { CurrentUser } from '../../common/current-user.decorator';
+import { Roles } from '../../common/roles.decorator';
 import { Role } from '@prisma/client';
 
 interface JwtPayload {
@@ -15,7 +16,7 @@ export class AuditController {
 
   /**
    * GET /v1/audit
-   *  - ADMIN: full access; can also filter by actor / entity / date range.
+   *  - ADMIN / CHIEF_EDITOR: full access; can also filter by actor / entity / date range.
    *  - EDITOR / AUTHOR: must pass `mine=1` (or `mine=true`); response is restricted to their own actions.
    *
    * `limit` is accepted as an alias for `perPage` to keep the plan's curl example working.
@@ -32,16 +33,16 @@ export class AuditController {
     @Query('dateTo') dateTo?: string,
     @Query('mine') mine?: string,
   ) {
-    const isAdmin = user.role === Role.ADMIN;
+    const canViewAll = user.role === Role.ADMIN || user.role === Role.CHIEF_EDITOR;
     const wantsMine = mine === '1' || mine === 'true';
 
-    if (!isAdmin && !wantsMine) {
+    if (!canViewAll && !wantsMine) {
       throw new ForbiddenException(
-        'Only ADMIN can list all audit entries; pass ?mine=1 for own activity.',
+        'Only ADMIN/CHIEF_EDITOR can list all audit entries; pass ?mine=1 for own activity.',
       );
     }
 
-    const effectiveActor = isAdmin ? actorId : user.sub;
+    const effectiveActor = canViewAll ? actorId : user.sub;
     const size = parseInt(perPage ?? limit ?? '20', 10);
 
     return this.audit.list({
@@ -52,5 +53,12 @@ export class AuditController {
       dateFrom,
       dateTo,
     });
+  }
+
+  /** GET /v1/audit/author-stats — published article counts per author. ADMIN only. */
+  @Get('author-stats')
+  @Roles(Role.ADMIN)
+  authorStats() {
+    return this.audit.authorStats();
   }
 }

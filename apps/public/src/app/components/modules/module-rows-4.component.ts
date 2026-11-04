@@ -1,133 +1,144 @@
 import { Component, Input, inject } from '@angular/core';
 import { RouterModule } from '@angular/router';
-import type { ResolvedRows4Row } from '@civicpress/shared';
-import { cleanExcerptText } from '@civicpress/shared';
-import { PostImagePillComponent } from '../post-image-pill.component';
+import {
+  hasModuleMedia,
+  normalizeCategoryColor,
+  type PostDateFormat,
+  type ResolvedRows4Row,
+} from '@civicpress/shared';
+import { CategoryLabelComponent } from '../category-label.component';
+import { PostImagePillsComponent } from '../post-image-pills.component';
+import { PostSubtitleComponent } from '../post-subtitle.component';
 import { PostViewCountComponent } from '../post-view-count.component';
+import { PostReadingTimeComponent } from '../post-reading-time.component';
+import { PostModuleMediaComponent } from '../post-module-media.component';
 import { SiteSettingsService } from '../../services/site-settings.service';
-import { formatPostDateForList } from '../../utils/post-date-display';
+import { groupRowsByHeader } from './rows-module-groups';
 
 /** Module: one or more rows of four articles (category or custom). */
 @Component({
   selector: 'cp-module-rows-4',
   standalone: true,
-  imports: [RouterModule, PostImagePillComponent, PostViewCountComponent],
+  imports: [
+    RouterModule,
+    CategoryLabelComponent,
+    PostImagePillsComponent,
+    PostSubtitleComponent,
+    PostViewCountComponent,
+    PostReadingTimeComponent,
+    PostModuleMediaComponent,
+  ],
   template: `
-    <div class="space-y-8">
-      @for (row of rows; track row.id) {
-        @if (row.posts.length > 0) {
-          <section>
-            @if (row.title || row.category) {
-              <div class="flex items-center justify-between mb-3">
-                @if (row.title) {
-                  <h2
-                    class="font-heading uppercase tracking-wide relative"
-                    style="font-size: var(--row-header-font-size, var(--news-title-font-size, 18px)); font-weight: var(--row-header-font-weight, var(--news-title-font-weight, 800)); color: var(--row-header-color, var(--news-title-color, currentColor));"
-                  >
-                    <span class="relative z-10 pr-3 bg-background text-gray-800">{{
-                      row.title
-                    }}</span>
-                    <span class="absolute bottom-0 left-0 w-full h-[3px] bg-gray-300"></span>
-                  </h2>
-                }
-                @if (row.category) {
-                  <a
-                    [routerLink]="['/category', row.category.slug]"
-                    class="text-xs text-gray-500 hover:text-gray-700 transition-colors uppercase tracking-wide"
-                    [class.ml-auto]="!row.title"
-                  >
-                    Mai mult »
-                  </a>
-                }
-              </div>
-            }
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              @for (item of row.posts; track item.post.id) {
-                <article
-                  class="group flex flex-col h-full bg-white border border-border rounded-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 overflow-hidden"
+    <div>
+      @for (group of rowGroups; track group.key; let last = $last) {
+        <section>
+          @if (showGroupHeader(group.header)) {
+            <div class="flex items-center justify-between mb-3">
+              @if (group.header.title) {
+                <h2
+                  class="font-heading uppercase tracking-wide relative"
+                  [class.cp-module-section-title--cat-pill]="!!rowCategoryColor(group.header)"
+                  [style.--category-color]="rowCategoryColor(group.header)"
+                  style="font-size: var(--row-header-font-size, var(--news-title-font-size, 18px)); font-weight: var(--row-header-font-weight, var(--news-title-font-weight, 800)); color: var(--row-header-color, var(--news-title-color, currentColor));"
                 >
-                  <a [routerLink]="'/' + item.post.slug" class="block">
-                    @if (item.post.heroImage) {
-                      <div class="relative overflow-hidden bg-muted aspect-[16/9]">
-                        <img
-                          [src]="item.post.heroImage.url"
-                          [alt]="item.post.heroImage.alt ?? item.post.title"
-                          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                          width="400"
-                          height="225"
-                        />
-                        <cp-post-image-pill [pill]="item.post.pill" />
-                      </div>
-                    }
-                  </a>
-                  <div class="p-3 flex flex-col flex-1">
-                    <h3
-                      class="font-heading leading-tight text-secondary line-clamp-3"
-                      style="font-size: var(--news-title-font-size, 20px); font-weight: var(--news-title-font-weight, 700); color: var(--news-title-color, currentColor);"
-                    >
-                      <a
-                        [routerLink]="'/' + item.post.slug"
-                        class="hover:text-primary transition-colors"
-                      >
-                        {{ item.post.title }}
-                      </a>
-                    </h3>
-                    @if (showSummary && item.post.excerpt) {
-                      <p
-                        class="text-gray-600 mt-2 news-summary-clamp"
-                        style="font-size: var(--news-summary-font-size, 14px); font-weight: var(--news-summary-font-weight, 400); color: var(--news-summary-color, currentColor);"
-                      >
-                        {{ cleanExcerpt(item.post) }}
-                      </p>
-                    }
-                    @if (canShowMeta(item, item.post)) {
-                      <div
-                        class="flex items-center justify-between gap-2 mt-auto pt-2 text-gray-500"
-                        style="font-size: var(--module-meta-font-size, 12px); font-weight: var(--module-meta-font-weight, 400); color: var(--module-meta-color, currentColor);"
-                      >
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          @if (canShowDate(item, item.post)) {
-                            <time [dateTime]="item.post.publishedAt">{{
-                              formatDate(item.post.publishedAt)
-                            }}</time>
-                          }
-                          @if (
-                            canShowDate(item, item.post) &&
-                            (canShowAuthor(item, item.post) || canShowViews(item.post))
-                          ) {
-                            <span class="text-gray-300">•</span>
-                          }
-                          @if (
-                            canShowAuthor(item, item.post) && displayAuthor(item.post);
-                            as authorName
-                          ) {
-                            <span class="font-medium">{{ authorName }}</span>
-                          }
-                          @if (canShowAuthor(item, item.post) && canShowViews(item.post)) {
-                            <span class="text-gray-300">•</span>
-                          }
-                          @if (canShowViews(item.post)) {
-                            <cp-post-view-count [count]="item.post.viewCount!" />
-                          }
-                        </div>
-                        @if (canShowCategory(item.post)) {
-                          <a
-                            [routerLink]="['/category', item.post.primaryCategory!.slug]"
-                            class="shrink-0 uppercase tracking-wide text-gray-500 hover:text-gray-700 transition-colors"
-                            style="font-size: var(--module-category-font-size, 12px); font-weight: var(--module-category-font-weight, 400); color: var(--module-category-color, currentColor);"
-                          >
-                            {{ item.post.primaryCategory!.name }}
-                          </a>
-                        }
-                      </div>
-                    }
-                  </div>
-                </article>
+                  <span class="cp-module-section-title-text">{{ group.header.title }}</span>
+                  <span class="cp-module-section-title-rule" aria-hidden="true"></span>
+                </h2>
+              }
+              @if (group.header.category) {
+                <a
+                  [routerLink]="['/category', group.header.category.slug]"
+                  class="text-xs text-gray-500 hover:text-gray-700 transition-colors uppercase tracking-wide"
+                  [class.ml-auto]="!group.header.title"
+                >
+                  Mai mult »
+                </a>
               }
             </div>
-          </section>
+          }
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-gray-400 md:-mx-4">
+            @for (item of group.posts; track item.post.id) {
+              <article class="group flex flex-col h-full bg-background px-4 pt-3 pb-3">
+                @if (hasModuleMedia(item.post)) {
+                  <div class="relative overflow-hidden bg-muted aspect-[16/9]">
+                    <cp-post-module-media [post]="item.post" playMode="inline">
+                      <cp-post-image-pills [pills]="item.post.pills" />
+                    </cp-post-module-media>
+                  </div>
+                }
+                <div class="pt-3 flex flex-col flex-1">
+                  <h3
+                    class="font-heading leading-tight text-secondary"
+                    style="font-size: var(--news-title-font-size, 20px); font-weight: var(--news-title-font-weight, 700); color: var(--news-title-color, currentColor);"
+                  >
+                    <a
+                      [routerLink]="'/' + item.post.slug"
+                      class="hover:text-primary transition-colors"
+                    >
+                      {{ item.post.title }}
+                    </a>
+                  </h3>
+                  <cp-post-subtitle
+                    [show]="showSummary"
+                    [showBumbi]="showBumbi"
+                    [bulbi]="item.post.bulbi ?? []"
+                    [excerpt]="item.post.excerpt"
+                    listClass="text-gray-600 mt-2"
+                    textClass="text-gray-600 mt-2"
+                  />
+                  @if (canShowMeta(group.header, item, item.post)) {
+                    <div
+                      class="flex items-center justify-between gap-2 mt-auto pt-2 text-gray-500"
+                      style="font-size: var(--module-meta-font-size, 12px); font-weight: var(--module-meta-font-weight, 400); color: var(--module-meta-color, currentColor);"
+                    >
+                      <div class="flex items-center gap-1.5 min-w-0">
+                        @if (canShowDate(item, item.post)) {
+                          <time [dateTime]="item.post.publishedAt">{{
+                            formatDate(item.post.publishedAt)
+                          }}</time>
+                        }
+                        @if (canShowDate(item, item.post) && canShowReadingTime(item.post)) {
+                          <span class="text-gray-300">•</span>
+                        }
+                        @if (canShowReadingTime(item.post)) {
+                          <cp-post-reading-time [seconds]="item.post.readingTimeSeconds!" />
+                        }
+                        @if (
+                          (canShowDate(item, item.post) || canShowReadingTime(item.post)) &&
+                          (canShowAuthor(item, item.post) || canShowViews(item.post))
+                        ) {
+                          <span class="text-gray-300">•</span>
+                        }
+                        @if (
+                          canShowAuthor(item, item.post) && displayAuthor(item.post);
+                          as authorName
+                        ) {
+                          <span class="font-medium">{{ authorName }}</span>
+                        }
+                        @if (canShowAuthor(item, item.post) && canShowViews(item.post)) {
+                          <span class="text-gray-300">•</span>
+                        }
+                        @if (canShowViews(item.post)) {
+                          <cp-post-view-count [count]="item.post.viewCount!" />
+                        }
+                      </div>
+                      @if (canShowCategory(group.header, item.post)) {
+                        <cp-category-label
+                          [name]="item.post.primaryCategory!.name"
+                          [slug]="item.post.primaryCategory!.slug"
+                          extraClass="shrink-0"
+                        />
+                      }
+                    </div>
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        </section>
+        @if (!last) {
+          <div class="cp-stack-rule" aria-hidden="true"></div>
         }
       }
     </div>
@@ -135,14 +146,26 @@ import { formatPostDateForList } from '../../utils/post-date-display';
 })
 export class ModuleRows4Component {
   private siteSettings = inject(SiteSettingsService);
+  readonly hasModuleMedia = hasModuleMedia;
 
   @Input() rows: ResolvedRows4Row[] = [];
   @Input() showCategory = false;
-  /** Show excerpt text under card titles. */
+  /** Show excerpt text under titles. */
   @Input() showSummary = true;
+  @Input() showBumbi: boolean | null = null;
+  @Input() dateFormat: PostDateFormat | null = null;
+  @Input() showReadingTime = false;
 
-  cleanExcerpt(post: ResolvedRows4Row['posts'][number]['post']): string {
-    return cleanExcerptText(post.excerpt);
+  get rowGroups() {
+    return groupRowsByHeader(this.rows, 4);
+  }
+
+  showGroupHeader(row: ResolvedRows4Row): boolean {
+    return !!row.title || !!row.category;
+  }
+
+  rowCategoryColor(row: ResolvedRows4Row): string | null {
+    return normalizeCategoryColor(row.category?.color) ?? null;
   }
 
   displayAuthor(post: ResolvedRows4Row['posts'][number]['post']): string | null {
@@ -167,23 +190,30 @@ export class ModuleRows4Component {
     return this.siteSettings.canShowViews(post);
   }
 
-  canShowCategory(post: ResolvedRows4Row['posts'][number]['post']): boolean {
+  canShowReadingTime(post: ResolvedRows4Row['posts'][number]['post']): boolean {
+    return this.showReadingTime && (post.readingTimeSeconds ?? 0) > 0;
+  }
+
+  canShowCategory(row: ResolvedRows4Row, post: ResolvedRows4Row['posts'][number]['post']): boolean {
+    if (row.category) return false;
     return this.showCategory && !!post.primaryCategory;
   }
 
   canShowMeta(
+    row: ResolvedRows4Row,
     item: ResolvedRows4Row['posts'][number],
     post: ResolvedRows4Row['posts'][number]['post'],
   ): boolean {
     return (
       this.canShowAuthor(item, post) ||
       this.canShowDate(item, post) ||
+      this.canShowReadingTime(post) ||
       this.canShowViews(post) ||
-      this.canShowCategory(post)
+      this.canShowCategory(row, post)
     );
   }
 
   formatDate(dateStr: string): string {
-    return formatPostDateForList(dateStr);
+    return this.siteSettings.formatPostDate(dateStr, this.dateFormat);
   }
 }

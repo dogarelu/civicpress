@@ -75,7 +75,11 @@ export interface PickedPost {
 
         @if (open() && results().length > 0) {
           <div
-            class="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto mt-1"
+            class="z-50 bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto mt-1"
+            [class.absolute]="!inline"
+            [class.top-full]="!inline"
+            [class.left-0]="!inline"
+            [class.right-0]="!inline"
           >
             @for (post of results(); track post.id) {
               <button
@@ -110,7 +114,11 @@ export interface PickedPost {
 
         @if (open() && !loading() && results().length === 0 && query.length >= 2) {
           <div
-            class="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded shadow-lg mt-1 px-3 py-2 text-sm text-gray-400"
+            class="z-50 bg-white border border-gray-200 rounded shadow-lg mt-1 px-3 py-2 text-sm text-gray-400"
+            [class.absolute]="!inline"
+            [class.top-full]="!inline"
+            [class.left-0]="!inline"
+            [class.right-0]="!inline"
           >
             Niciun rezultat
           </div>
@@ -121,6 +129,8 @@ export interface PickedPost {
 })
 export class PostPickerComponent implements OnDestroy {
   @Input() label = 'Articol';
+  /** Keep search results in the page flow so they don't cover controls below. */
+  @Input() inline = false;
   @Input() value: PickedPost | null = null;
   @Output() selected = new EventEmitter<PickedPost | null>();
 

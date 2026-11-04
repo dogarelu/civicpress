@@ -6,12 +6,14 @@ import type { UserSummary } from '@civicpress/shared';
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Admin',
+  CHIEF_EDITOR: 'Editor șef',
   EDITOR: 'Editor',
   AUTHOR: 'Autor',
 };
 
 const ROLE_COLORS: Record<string, string> = {
   ADMIN: 'bg-red-100 text-red-700',
+  CHIEF_EDITOR: 'bg-purple-100 text-purple-700',
   EDITOR: 'bg-blue-100 text-blue-700',
   AUTHOR: 'bg-gray-100 text-gray-700',
 };

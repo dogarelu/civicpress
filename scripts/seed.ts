@@ -318,9 +318,18 @@ async function ensureDefaultCategories(): Promise<Map<string, string>> {
         slug: cat.slug,
         color: cat.color,
         showInMenu: true,
+        showInMobileMenu: true,
+        showInMobileRow: true,
         menuOrder: cat.menuOrder,
       },
-      update: { name: cat.name, color: cat.color, showInMenu: true, menuOrder: cat.menuOrder },
+      update: {
+        name: cat.name,
+        color: cat.color,
+        showInMenu: true,
+        showInMobileMenu: true,
+        showInMobileRow: true,
+        menuOrder: cat.menuOrder,
+      },
     });
     idMap.set(cat.slug, record.id);
   }
@@ -424,6 +433,8 @@ async function ingestWpData({
               slug: normalizedSlug,
               description: cat.description || null,
               showInMenu: false,
+              showInMobileMenu: false,
+              showInMobileRow: false,
               externalId: String(cat.id),
             },
           })
@@ -433,6 +444,8 @@ async function ingestWpData({
               slug: normalizedSlug,
               description: cat.description || null,
               showInMenu: false,
+              showInMobileMenu: false,
+              showInMobileRow: false,
               menuOrder: 99,
               externalId: String(cat.id),
             },
@@ -599,7 +612,7 @@ async function seedSettings() {
       backgroundColor: '#ffffff',
       textColor: '#2d2d2d',
       headingFont: 'Roboto',
-      bodyFont: 'Open Sans',
+      bodyFont: 'Source Sans 3',
       facebookUrl: 'https://www.facebook.com/civicpress.ro/',
       footerContactInfo:
         '<p><strong>Email:</strong> redactie@civicpress.ro<br><strong>Telefon:</strong> +40 721 000 000</p>',
@@ -735,6 +748,12 @@ async function seedDevUsers() {
       role: 'EDITOR' as const,
     },
     {
+      email: 'editor-sef@civicpress.ro',
+      displayName: 'Editor șef Civicpress',
+      slug: 'editor-sef',
+      role: 'CHIEF_EDITOR' as const,
+    },
+    {
       email: 'author@civicpress.ro',
       displayName: 'Author Civicpress',
       slug: 'author',
@@ -768,9 +787,10 @@ async function seedDevUsers() {
   }
 
   console.log('  ✅ Dev users seeded:');
-  console.log('     admin@civicpress.ro  / civicpress  (ADMIN)');
-  console.log('     editor@civicpress.ro / civicpress  (EDITOR)');
-  console.log('     author@civicpress.ro / civicpress  (AUTHOR)');
+  console.log('     admin@civicpress.ro       / civicpress  (ADMIN)');
+  console.log('     editor-sef@civicpress.ro  / civicpress  (CHIEF_EDITOR)');
+  console.log('     editor@civicpress.ro      / civicpress  (EDITOR)');
+  console.log('     author@civicpress.ro      / civicpress  (AUTHOR)');
 }
 
 async function adoptOrphanPosts() {

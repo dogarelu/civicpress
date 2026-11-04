@@ -13,8 +13,11 @@ export class CategoriesController {
 
   @Public()
   @Get('menu')
-  getMenu() {
-    return this.categories.getMenu();
+  getMenu(@Query('variant') variant?: string) {
+    if (variant === 'mobile' || variant === 'mobile-row') {
+      return this.categories.getMenu(variant);
+    }
+    return this.categories.getMenu('web');
   }
 
   @Public()
@@ -31,7 +34,7 @@ export class CategoriesController {
 
   // Authors need the list to pick a category when writing a post
   @Get('admin/categories')
-  @Roles(Role.AUTHOR, Role.EDITOR, Role.ADMIN)
+  @Roles(Role.AUTHOR, Role.EDITOR, Role.CHIEF_EDITOR, Role.ADMIN)
   listAdmin() {
     return this.categories.listAdmin();
   }

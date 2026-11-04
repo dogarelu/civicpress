@@ -12,38 +12,53 @@ import {
   ViewChildren,
   inject,
 } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { NgTemplateOutlet, isPlatformBrowser } from '@angular/common';
 import { ModuleHeroComponent } from './module-hero.component';
 import { ModuleHeroListComponent } from './module-hero-list.component';
 import { ModuleHeroList6Component } from './module-hero-list-6.component';
+import { ModuleHeroListCenterComponent } from './module-hero-list-center.component';
 import { ModuleGridComponent } from './module-grid.component';
 import { ModuleListComponent } from './module-list.component';
 import { ModuleRows3Component } from './module-rows-3.component';
 import { ModuleRows4Component } from './module-rows-4.component';
 import { ModuleRows4SmComponent } from './module-rows-4-sm.component';
+import { ModuleRows5Component } from './module-rows-5.component';
+import { ModulePictures7Component } from './module-pictures-7.component';
+import { ModuleCategoryColumnsComponent } from './module-category-columns.component';
 import { ModuleSlideshowComponent } from './module-slideshow.component';
 import { ModuleHeroTopListComponent } from './module-hero-top-list.component';
+import { ModuleVideoListComponent } from './module-video-list.component';
+import { ModuleArticleListComponent } from './module-article-list.component';
+import { ModuleSplitComponent } from './module-split.component';
 import { LayoutSidebarComponent } from './layout-sidebar.component';
-import { HomeListItemComponent } from '../home-list-item.component';
 import { MobileOrderedLayoutComponent } from './mobile-ordered-layout.component';
+import { MobileModulesLayoutComponent } from './mobile-modules-layout.component';
 import { ApiService } from '../../services/api.service';
 import type {
   MobileLayoutUnit,
   PostSummary,
+  ResolvedMobileModule,
   ResolvedModule,
   ResolvedSidebar,
   SidebarMode,
 } from '@civicpress/shared';
 import {
+  buildModuleBackgroundCss,
   buildModuleTypographyCss,
   buildSummaryDisplayCss,
   combineInlineStyles,
+  moduleTitleUsesCategoryPill,
+  normalizeCategoryColor,
   isFullWidthModuleType,
+  isStickyUntilBottom,
+  normalizeStickyBlocks,
+  resolveStickyRanges,
+  splitModulesByStickyRanges,
 } from '@civicpress/shared';
 
 const LOAD_MORE_COUNT = 10;
 
-const ROWS_MODULE_TYPES = new Set(['rows-3', 'rows-4', 'rows-4-sm']);
+const ROWS_MODULE_TYPES = new Set(['rows-3', 'rows-4', 'rows-4-sm', 'rows-5']);
 
 type WithSidebarSection = {
   kind: 'with-sidebar';
@@ -63,122 +78,105 @@ type LayoutSection = WithSidebarSection | FullWidthSection;
   selector: 'cp-module-layout',
   standalone: true,
   imports: [
+    NgTemplateOutlet,
     ModuleHeroComponent,
     ModuleHeroListComponent,
     ModuleHeroList6Component,
+    ModuleHeroListCenterComponent,
     ModuleGridComponent,
     ModuleListComponent,
     ModuleRows3Component,
     ModuleRows4Component,
     ModuleRows4SmComponent,
+    ModuleRows5Component,
+    ModulePictures7Component,
+    ModuleCategoryColumnsComponent,
     ModuleSlideshowComponent,
     ModuleHeroTopListComponent,
+    ModuleVideoListComponent,
+    ModuleArticleListComponent,
+    ModuleSplitComponent,
     LayoutSidebarComponent,
     MobileOrderedLayoutComponent,
+    MobileModulesLayoutComponent,
   ],
   template: `
     @if (showDesktop) {
       <!-- Desktop layout (hidden on mobile) -->
-      <div class="hidden md:block space-y-6">
-        @for (section of layoutSections; track sectionTrack(section, $index)) {
+      <div class="hidden md:block">
+        @for (
+          section of layoutSections;
+          track sectionTrack(section, $index);
+          let lastSection = $last
+        ) {
           @if (section.kind === 'with-sidebar') {
-            <div class="grid grid-cols-1 gap-4" [class.lg:grid-cols-4]="!!sidebar">
-              <div [class.lg:col-span-3]="!!sidebar">
-                <div #mainColumn class="space-y-7">
-                  @for (mod of section.modules; track mod.id; let last = $last) {
-                    <section [attr.style]="moduleTypographyStyle(mod)">
-                      @switch (mod.type) {
-                        @case ('hero') {
-                          <cp-module-hero
-                            [item]="mod.posts[0] ?? null"
-                            [showCategory]="mod.showCategory ?? true"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('hero-list') {
-                          <cp-module-hero-list
-                            [items]="mod.posts.slice(0, 4)"
-                            [showCategory]="mod.showCategory ?? true"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('hero-top-list') {
-                          <cp-module-hero-top-list
-                            [items]="mod.posts.slice(0, 4)"
-                            [showCategory]="mod.showCategory ?? true"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('hero-slideshow') {
-                          <cp-module-slideshow
-                            [items]="mod.posts"
-                            [showCategory]="mod.showCategory ?? false"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('grid') {
-                          <cp-module-grid
-                            [items]="mod.posts"
-                            [showCategory]="mod.showCategory ?? true"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('list') {
-                          <cp-module-list
-                            [items]="listItems(mod)"
-                            [hasMore]="listHasMore(mod)"
-                            [loading]="loadingModuleId === mod.id"
-                            [typography]="mod.typography"
-                            [showCategory]="mod.showCategory ?? true"
-                            [showSummary]="mod.showSummary ?? true"
-                            (loadMore)="onLoadMore(mod)"
-                          />
-                        }
-                        @case ('rows-3') {
-                          <cp-module-rows-3
-                            [rows]="mod.rows ?? []"
-                            [showCategory]="mod.showCategory ?? false"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('rows-4') {
-                          <cp-module-rows-4
-                            [rows]="mod.rows ?? []"
-                            [showCategory]="mod.showCategory ?? false"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('rows-4-sm') {
-                          <cp-module-rows-4-sm
-                            [rows]="mod.rows ?? []"
-                            [showCategory]="mod.showCategory ?? false"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
-                        @case ('slideshow') {
-                          <cp-module-slideshow
-                            [items]="mod.posts"
-                            [showCategory]="mod.showCategory ?? false"
-                            [showSummary]="mod.showSummary ?? true"
-                          />
-                        }
+            <div
+              class="grid grid-cols-1 gap-4"
+              [class.md:grid-cols-4]="!!sidebar"
+              [class.md:gap-0]="!!sidebar"
+              [class.md:-mx-4]="!!sidebar"
+            >
+              <div
+                [class.md:col-span-3]="!!sidebar"
+                [class.md:px-4]="!!sidebar"
+                [class.md:border-r]="!!sidebar"
+                [class.md:border-gray-400]="!!sidebar"
+              >
+                <div #mainColumn>
+                  @if (stickySplitForSection(section); as split) {
+                    @for (range of split.ranges; track $index; let si = $index) {
+                      @if (range.gap.length) {
+                        <div #stickyGapMeasure [attr.data-sticky-gap]="si">
+                          @for (mod of range.gap; track mod.id) {
+                            <ng-container
+                              *ngTemplateOutlet="
+                                mainModuleTpl;
+                                context: { $implicit: mod, last: false }
+                              "
+                            />
+                          }
+                        </div>
                       }
-                    </section>
-                    @if (!last) {
-                      <div class="flex items-center gap-0" aria-hidden="true">
-                        <span class="h-[3px] w-12 bg-primary rounded-full"></span>
-                        <span class="h-px flex-1 bg-border"></span>
+                      <div #stickyMeasure [attr.data-sticky-range]="si">
+                        @for (mod of range.modules; track mod.id; let last = $last) {
+                          <ng-container
+                            *ngTemplateOutlet="
+                              mainModuleTpl;
+                              context: {
+                                $implicit: mod,
+                                last:
+                                  last &&
+                                  si === split.ranges.length - 1 &&
+                                  split.afterModules.length === 0,
+                              }
+                            "
+                          />
+                        }
                       </div>
+                    }
+                    @for (mod of split.afterModules; track mod.id; let last = $last) {
+                      <ng-container
+                        *ngTemplateOutlet="mainModuleTpl; context: { $implicit: mod, last }"
+                      />
+                    }
+                  } @else {
+                    @for (mod of section.modules; track mod.id; let last = $last) {
+                      <ng-container
+                        *ngTemplateOutlet="mainModuleTpl; context: { $implicit: mod, last }"
+                      />
                     }
                   }
                 </div>
               </div>
               @if (sidebar) {
-                <div class="lg:col-span-1">
+                <div class="md:col-span-1 md:px-4">
                   <cp-layout-sidebar
                     [sidebar]="sidebar"
                     [streamStart]="streamStarts[section.sectionIndex] ?? 0"
                     [maxHeightPx]="sectionMaxHeights[section.sectionIndex] ?? null"
+                    [stickyTravelHeightsPx]="stickyTravelHeightsForSection(section)"
+                    [stickyGapHeightsPx]="stickyGapHeightsForSection(section)"
+                    [stickyUntilBottom]="stickyUntilBottom"
                     [extraPostsByMode]="sidebarExtraPostsByMode"
                     [hasMoreByMode]="sidebarHasMoreOverrideByMode"
                     [loadingByMode]="sidebarLoadingByMode"
@@ -189,13 +187,68 @@ type LayoutSection = WithSidebarSection | FullWidthSection;
               }
             </div>
           } @else {
-            <section [attr.style]="moduleTypographyStyle(section.mod)">
+            <section
+              [class.cp-module-bg]="!!section.mod.backgroundColor"
+              [attr.style]="moduleTypographyStyle(section.mod)"
+            >
+              @if (section.mod.title) {
+                <h2
+                  class="font-heading uppercase tracking-wide relative mb-3"
+                  [class.cp-module-section-title--cat-pill]="titleUsesCategoryPill(section.mod)"
+                  [style.--category-color]="categoryColor(section.mod)"
+                  style="font-size: var(--row-header-font-size, var(--news-title-font-size, 18px)); font-weight: var(--row-header-font-weight, var(--news-title-font-weight, 800)); color: var(--row-header-color, var(--news-title-color, currentColor));"
+                >
+                  <span class="cp-module-section-title-text">{{ section.mod.title }}</span>
+                  <span class="cp-module-section-title-rule" aria-hidden="true"></span>
+                </h2>
+              }
               @switch (section.mod.type) {
                 @case ('hero-list-6') {
                   <cp-module-hero-list-6
-                    [items]="section.mod.posts.slice(0, 7)"
-                    [showCategory]="section.mod.showCategory ?? true"
+                    [items]="section.mod.posts"
+                    [sideCount]="section.mod.sideCount ?? 3"
+                    [showCategory]="articleShowCategory(section.mod)"
                     [showSummary]="section.mod.showSummary ?? true"
+                    [showBumbi]="section.mod.showBumbi ?? section.mod.showSummary ?? true"
+                    [dateFormat]="section.mod.dateFormat ?? null"
+                    [showReadingTime]="section.mod.showReadingTime ?? false"
+                  />
+                }
+                @case ('hero-list-center') {
+                  <cp-module-hero-list-center
+                    [items]="section.mod.posts"
+                    [sideCount]="section.mod.sideCount ?? 3"
+                    [showCategory]="articleShowCategory(section.mod)"
+                    [showSummary]="section.mod.showSummary ?? true"
+                    [showBumbi]="section.mod.showBumbi ?? section.mod.showSummary ?? true"
+                    [dateFormat]="section.mod.dateFormat ?? null"
+                    [showReadingTime]="section.mod.showReadingTime ?? false"
+                  />
+                }
+                @case ('rows-5') {
+                  <cp-module-rows-5
+                    [rows]="section.mod.rows ?? []"
+                    [showCategory]="section.mod.showCategory ?? false"
+                    [showSummary]="section.mod.showSummary ?? true"
+                    [showBumbi]="section.mod.showBumbi ?? section.mod.showSummary ?? true"
+                    [dateFormat]="section.mod.dateFormat ?? null"
+                    [showReadingTime]="section.mod.showReadingTime ?? false"
+                  />
+                }
+                @case ('pictures-7') {
+                  <cp-module-pictures-7
+                    [items]="section.mod.posts"
+                    [count]="section.mod.count ?? 7"
+                    [showBumbi]="section.mod.showBumbi ?? false"
+                  />
+                }
+                @case ('category-columns') {
+                  <cp-module-category-columns
+                    [columns]="section.mod.columns ?? []"
+                    [smallCount]="section.mod.smallCount ?? 3"
+                    [dateFormat]="section.mod.dateFormat ?? null"
+                    [showReadingTime]="section.mod.showReadingTime ?? false"
+                    [showBumbi]="section.mod.showBumbi ?? false"
                   />
                 }
                 @default {
@@ -203,27 +256,217 @@ type LayoutSection = WithSidebarSection | FullWidthSection;
                     [rows]="section.mod.rows ?? []"
                     [showCategory]="section.mod.showCategory ?? false"
                     [showSummary]="section.mod.showSummary ?? true"
+                    [showBumbi]="section.mod.showBumbi ?? section.mod.showSummary ?? true"
+                    [dateFormat]="section.mod.dateFormat ?? null"
+                    [showReadingTime]="section.mod.showReadingTime ?? false"
                   />
                 }
               }
             </section>
+          }
+          @if (!lastSection) {
+            <div class="cp-stack-rule" aria-hidden="true"></div>
           }
         }
       </div>
     }
 
     @if (showMobile) {
-      <!-- Mobile layout: flat list in configured unit order (visible only below md) -->
+      <!-- Mobile: dedicated modules when configured; else legacy web-order fallback -->
       <div class="md:hidden">
-        <cp-mobile-ordered-layout
-          [mobileOrder]="mobileOrder"
-          [modules]="modules"
-          [sidebar]="sidebar"
-          [extras]="mobileExtras"
-          [categorySlug]="categorySlug"
-        />
+        @if (mobileModules.length > 0) {
+          <cp-mobile-modules-layout [modules]="mobileModules" />
+        } @else {
+          <cp-mobile-ordered-layout
+            [mobileOrder]="mobileOrder"
+            [modules]="modules"
+            [sidebar]="sidebar"
+            [extras]="mobileExtras"
+            [categorySlug]="categorySlug"
+          />
+        }
       </div>
     }
+
+    <ng-template #mainModuleTpl let-mod let-last="last">
+      <section
+        [class.cp-module-bg]="!!mod.backgroundColor"
+        [attr.style]="moduleTypographyStyle(mod)"
+      >
+        @if (mod.title) {
+          <h2
+            class="font-heading uppercase tracking-wide relative mb-3"
+            [class.cp-module-section-title--cat-pill]="titleUsesCategoryPill(mod)"
+            [style.--category-color]="categoryColor(mod)"
+            style="font-size: var(--row-header-font-size, var(--news-title-font-size, 18px)); font-weight: var(--row-header-font-weight, var(--news-title-font-weight, 800)); color: var(--row-header-color, var(--news-title-color, currentColor));"
+          >
+            <span class="cp-module-section-title-text">{{ mod.title }}</span>
+            <span class="cp-module-section-title-rule" aria-hidden="true"></span>
+          </h2>
+        }
+        @switch (mod.type) {
+          @case ('hero') {
+            <cp-module-hero
+              [item]="mod.posts[0] ?? null"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('hero-list') {
+            <cp-module-hero-list
+              [items]="mod.posts"
+              [sideCount]="mod.sideCount ?? 3"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('hero-top-list') {
+            <cp-module-hero-top-list
+              [items]="mod.posts"
+              [sideCount]="mod.sideCount ?? 3"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('hero-slideshow') {
+            <cp-module-slideshow
+              [items]="mod.posts"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('grid') {
+            <cp-module-grid
+              [items]="mod.posts"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('list') {
+            <cp-module-list
+              [items]="listItems(mod)"
+              [hasMore]="listHasMore(mod)"
+              [loading]="loadingModuleId === mod.id"
+              [typography]="mod.typography"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+              (loadMore)="onLoadMore(mod)"
+            />
+          }
+          @case ('rows-3') {
+            <cp-module-rows-3
+              [rows]="mod.rows ?? []"
+              [showCategory]="mod.showCategory ?? false"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('rows-4') {
+            <cp-module-rows-4
+              [rows]="mod.rows ?? []"
+              [showCategory]="mod.showCategory ?? false"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('rows-4-sm') {
+            <cp-module-rows-4-sm
+              [rows]="mod.rows ?? []"
+              [showCategory]="mod.showCategory ?? false"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('rows-5') {
+            <cp-module-rows-5
+              [rows]="mod.rows ?? []"
+              [showCategory]="mod.showCategory ?? false"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('pictures-7') {
+            <cp-module-pictures-7
+              [items]="mod.posts"
+              [count]="mod.count ?? 7"
+              [showBumbi]="mod.showBumbi ?? false"
+            />
+          }
+          @case ('category-columns') {
+            <cp-module-category-columns
+              [columns]="mod.columns ?? []"
+              [smallCount]="mod.smallCount ?? 3"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+              [showBumbi]="mod.showBumbi ?? false"
+            />
+          }
+          @case ('video-list') {
+            <cp-module-video-list [items]="mod.posts" [showBumbi]="mod.showBumbi ?? false" />
+          }
+          @case ('article-list') {
+            <cp-module-article-list
+              [items]="mod.posts"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('split') {
+            <cp-module-split
+              [item]="mod.posts[0] ?? null"
+              [splitReverse]="mod.splitReverse ?? false"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+          @case ('slideshow') {
+            <cp-module-slideshow
+              [items]="mod.posts"
+              [showCategory]="articleShowCategory(mod)"
+              [showSummary]="mod.showSummary ?? true"
+              [showBumbi]="mod.showBumbi ?? mod.showSummary ?? true"
+              [dateFormat]="mod.dateFormat ?? null"
+              [showReadingTime]="mod.showReadingTime ?? false"
+            />
+          }
+        }
+      </section>
+      @if (!last) {
+        <div class="cp-stack-rule" aria-hidden="true"></div>
+      }
+    </ng-template>
   `,
 })
 export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestroy {
@@ -235,12 +478,16 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
   @Input() modules: ResolvedModule[] = [];
   @Input() sidebar: ResolvedSidebar | null = null;
   @Input() mobileOrder: MobileLayoutUnit[] = [];
+  /** When non-empty, mobile uses these instead of the legacy mobileOrder fallback. */
+  @Input() mobileModules: ResolvedMobileModule[] = [];
   @Input() showDesktop = true;
   @Input() showMobile = true;
   /** Set on category pages so extra loads only include that category. */
   @Input() categorySlug: string | null = null;
 
   @ViewChildren('mainColumn') mainColumns!: QueryList<ElementRef<HTMLElement>>;
+  @ViewChildren('stickyMeasure') stickyMeasures!: QueryList<ElementRef<HTMLElement>>;
+  @ViewChildren('stickyGapMeasure') stickyGapMeasures!: QueryList<ElementRef<HTMLElement>>;
 
   /** Extra posts keyed by module id. */
   private extraItems: Record<string, ResolvedModule['posts']> = {};
@@ -258,6 +505,11 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
   /** Measured main-column height per with-sidebar section. */
   sectionMaxHeights: Array<number | null> = [];
   private measuredHeightsKey = '';
+  /** Measured sticky travel heights for section 0 (one per sticky sidebar block). */
+  stickyTravelHeightsPx: number[] | null = null;
+  /** Measured left-column gap heights before each sticky range. */
+  stickyGapHeightsPx: number[] | null = null;
+  private measuredStickyKey = '';
 
   get mobileExtras() {
     return {
@@ -270,8 +522,67 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
     this.streamStarts = [0];
     this.sectionMaxHeights = [];
     this.measuredHeightsKey = '';
+    this.stickyTravelHeightsPx = null;
+    this.stickyGapHeightsPx = null;
+    this.measuredStickyKey = '';
     // Re-observe columns after content swaps (e.g. navigating between pages).
     queueMicrotask(() => this.setupResizeObserver());
+  }
+
+  /**
+   * When sticky is enabled, split the first with-sidebar section into sequential
+   * left-column segments so each sticky sidebar block can relay (including later
+   * blocks whose earlier neighbors are not sticky).
+   * Category "until bottom" does not split — CSS sticky lasts through the column.
+   */
+  stickySplitForSection(section: WithSidebarSection): {
+    ranges: { gap: ResolvedModule[]; modules: ResolvedModule[] }[];
+    afterModules: ResolvedModule[];
+  } | null {
+    const stickyBlocks = this.sidebar
+      ? normalizeStickyBlocks(this.sidebar, this.sidebar.blocks.length)
+      : [];
+    if (stickyBlocks.length === 0 || section.sectionIndex !== 0) return null;
+    if (this.stickyUntilBottom) return null;
+    if (section.modules.length === 0) return null;
+
+    const ranges = resolveStickyRanges(
+      stickyBlocks,
+      section.modules.map((mod) => mod.id),
+    );
+    if (ranges.length === 0) return null;
+
+    const split = splitModulesByStickyRanges(section.modules, ranges);
+    return {
+      ranges: split.ranges,
+      afterModules: split.after,
+    };
+  }
+
+  stickyTravelHeightsForSection(section: WithSidebarSection): number[] | null {
+    const stickyBlocks = this.sidebar
+      ? normalizeStickyBlocks(this.sidebar, this.sidebar.blocks.length)
+      : [];
+    if (stickyBlocks.length === 0 || section.sectionIndex !== 0) return null;
+    if (this.stickyUntilBottom) return null;
+    return this.stickyTravelHeightsPx;
+  }
+
+  stickyGapHeightsForSection(section: WithSidebarSection): number[] | null {
+    const stickyBlocks = this.sidebar
+      ? normalizeStickyBlocks(this.sidebar, this.sidebar.blocks.length)
+      : [];
+    if (stickyBlocks.length === 0 || section.sectionIndex !== 0) return null;
+    if (this.stickyUntilBottom) return null;
+    return this.stickyGapHeightsPx;
+  }
+
+  get stickyUntilBottom(): boolean {
+    if (!this.sidebar) return false;
+    const stickyBlocks = normalizeStickyBlocks(this.sidebar, this.sidebar.blocks.length);
+    if (stickyBlocks.length === 0) return false;
+    // Category pages always pin through the full left column (no until-module relay).
+    return !!this.categorySlug || isStickyUntilBottom(stickyBlocks);
   }
 
   /** Modules that actually have content; keeps separators from trailing after empty ones. */
@@ -279,6 +590,9 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
     return this.modules.filter((mod) => {
       if (ROWS_MODULE_TYPES.has(mod.type)) {
         return (mod.rows ?? []).some((row) => row.posts.length > 0);
+      }
+      if (mod.type === 'category-columns') {
+        return (mod.columns ?? []).some((col) => col.posts.length > 0);
       }
       return mod.posts.length > 0;
     });
@@ -290,7 +604,7 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
     let sectionIndex = 0;
 
     for (const mod of this.visibleModules) {
-      if (isFullWidthModuleType(mod.type)) {
+      if (isFullWidthModuleType(mod.type, { count: mod.count })) {
         if (current.length > 0) {
           sections.push({ kind: 'with-sidebar', sectionIndex: sectionIndex++, modules: current });
           current = [];
@@ -321,6 +635,8 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
     if (!isPlatformBrowser(this.platformId)) return;
     this.setupResizeObserver();
     this.mainColumns.changes.subscribe(() => this.setupResizeObserver());
+    this.stickyMeasures.changes.subscribe(() => this.setupResizeObserver());
+    this.stickyGapMeasures.changes.subscribe(() => this.setupResizeObserver());
   }
 
   ngOnDestroy(): void {
@@ -335,6 +651,12 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
     this.resizeObserver = new ResizeObserver(() => this.zone.run(() => this.measureSections()));
     for (const column of this.mainColumns?.toArray() ?? []) {
       this.resizeObserver.observe(column.nativeElement);
+    }
+    for (const measure of this.stickyMeasures?.toArray() ?? []) {
+      this.resizeObserver.observe(measure.nativeElement);
+    }
+    for (const measure of this.stickyGapMeasures?.toArray() ?? []) {
+      this.resizeObserver.observe(measure.nativeElement);
     }
     this.measureSections();
   }
@@ -359,10 +681,37 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
     );
 
     const key = nextHeights.map((h) => h ?? 'all').join('|');
-    if (key === this.measuredHeightsKey) return;
+    if (key !== this.measuredHeightsKey) {
+      this.measuredHeightsKey = key;
+      this.sectionMaxHeights = nextHeights;
+    }
 
-    this.measuredHeightsKey = key;
-    this.sectionMaxHeights = nextHeights;
+    const stickyBlocks = this.sidebar
+      ? normalizeStickyBlocks(this.sidebar, this.sidebar.blocks.length)
+      : [];
+    if (stickyBlocks.length > 0 && !this.stickyUntilBottom) {
+      const measures = this.stickyMeasures?.toArray() ?? [];
+      const gapByIndex = new Map<number, number>();
+      for (const measure of this.stickyGapMeasures?.toArray() ?? []) {
+        const index = Number(measure.nativeElement.getAttribute('data-sticky-gap'));
+        if (Number.isFinite(index)) {
+          gapByIndex.set(index, measure.nativeElement.offsetHeight);
+        }
+      }
+      const heights = measures.map((measure) => measure.nativeElement.offsetHeight);
+      const gapHeights = heights.map((_, index) => gapByIndex.get(index) ?? 0);
+      const stickyKey = `${heights.join('|')}::${gapHeights.join('|')}`;
+      if (stickyKey !== this.measuredStickyKey) {
+        this.measuredStickyKey = stickyKey;
+        this.stickyTravelHeightsPx =
+          heights.length > 0 && heights.some((h) => h > 0) ? heights : null;
+        this.stickyGapHeightsPx = gapHeights.some((h) => h > 0) ? gapHeights : [];
+      }
+    } else if (this.stickyTravelHeightsPx != null || this.stickyGapHeightsPx != null) {
+      this.measuredStickyKey = '';
+      this.stickyTravelHeightsPx = null;
+      this.stickyGapHeightsPx = null;
+    }
   }
 
   onStreamEnd(sectionIndex: number, streamEnd: number): void {
@@ -388,19 +737,41 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
   onLoadMore(mod: ResolvedModule): void {
     if (this.loadingModuleId !== null) return;
     this.loadingModuleId = mod.id;
-    this.api
-      .getMorePosts(this.visiblePostIds(), this.categorySlug ?? undefined, LOAD_MORE_COUNT)
-      .subscribe({
-        next: (res) => {
-          const mapped = res.posts.map((post) => ({ post, showDate: true, showAuthor: true }));
-          this.extraItems[mod.id] = [...(this.extraItems[mod.id] ?? []), ...mapped];
-          this.hasMoreOverride[mod.id] = res.hasMore;
-          this.loadingModuleId = null;
-        },
-        error: () => {
-          this.loadingModuleId = null;
-        },
-      });
+    const categorySlug = mod.category?.slug ?? this.categorySlug ?? undefined;
+    this.api.getMorePosts(this.visiblePostIds(), categorySlug, LOAD_MORE_COUNT).subscribe({
+      next: (res) => {
+        const mapped = res.posts.map((post) => ({ post, showDate: true, showAuthor: true }));
+        this.extraItems[mod.id] = [...(this.extraItems[mod.id] ?? []), ...mapped];
+        this.hasMoreOverride[mod.id] = res.hasMore;
+        this.loadingModuleId = null;
+      },
+      error: () => {
+        this.loadingModuleId = null;
+      },
+    });
+  }
+
+  titleUsesCategoryPill(mod: ResolvedModule): boolean {
+    return moduleTitleUsesCategoryPill(mod);
+  }
+
+  categoryColor(mod: ResolvedModule): string | null {
+    return normalizeCategoryColor(mod.category?.color) ?? null;
+  }
+
+  /**
+   * Per-article category labels: respect the module toggle, but hide them when the
+   * module itself is scoped to a category (the section title replaces the labels).
+   */
+  articleShowCategory(mod: ResolvedModule): boolean {
+    if (mod.category) return false;
+    if (mod.type === 'slideshow' || mod.type === 'hero-slideshow') {
+      return mod.showCategory ?? false;
+    }
+    if (ROWS_MODULE_TYPES.has(mod.type)) {
+      return mod.showCategory ?? false;
+    }
+    return mod.showCategory ?? true;
   }
 
   onSidebarLoadMore(mode: SidebarMode): void {
@@ -450,8 +821,9 @@ export class ModuleLayoutComponent implements OnChanges, AfterViewInit, OnDestro
 
   moduleTypographyStyle(mod: ResolvedModule): string | null {
     return combineInlineStyles(
+      buildModuleBackgroundCss(mod.backgroundColor),
       buildModuleTypographyCss(mod.typography),
-      buildSummaryDisplayCss(mod.summaryTypography, mod.summaryRows),
+      buildSummaryDisplayCss(mod.summaryTypography, mod.summaryRows, mod.heroSummaryTypography),
     );
   }
 }

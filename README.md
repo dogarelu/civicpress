@@ -34,11 +34,12 @@ The `--seed` flag downloads articles, images, and site settings from the live si
 
 ### Dev credentials (created by seed)
 
-| Email                  | Password     | Role   |
-| ---------------------- | ------------ | ------ |
-| `admin@civicpress.ro`  | `civicpress` | ADMIN  |
-| `editor@civicpress.ro` | `civicpress` | EDITOR |
-| `author@civicpress.ro` | `civicpress` | AUTHOR |
+| Email                      | Password     | Role         |
+| -------------------------- | ------------ | ------------ |
+| `admin@civicpress.ro`      | `civicpress` | ADMIN        |
+| `editor-sef@civicpress.ro` | `civicpress` | CHIEF_EDITOR |
+| `editor@civicpress.ro`     | `civicpress` | EDITOR       |
+| `author@civicpress.ro`     | `civicpress` | AUTHOR       |
 
 > **Note:** Change these before deploying to production!
 

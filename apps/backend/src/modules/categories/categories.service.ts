@@ -53,9 +53,15 @@ export class CategoriesService {
     }
   }
 
-  async getMenu() {
+  async getMenu(variant: 'web' | 'mobile' | 'mobile-row' = 'web') {
+    const where =
+      variant === 'mobile'
+        ? { showInMobileMenu: true }
+        : variant === 'mobile-row'
+          ? { showInMobileRow: true }
+          : { showInMenu: true };
     const cats = await this.prisma.category.findMany({
-      where: { showInMenu: true },
+      where,
       orderBy: { menuOrder: 'asc' },
     });
     const byId = new Map(cats.map((cat) => [cat.id, cat]));
@@ -103,38 +109,92 @@ export class CategoriesService {
     if (!category) throw new NotFoundException(`Category not found: ${slug}`);
 
     const isVideoCategory = slug === 'video';
-    const skip = (page - 1) * perPage;
     const categoryIds = [category.id, ...category.children.map((child) => child.id)];
 
-    const postWhere = {
-      status: 'PUBLISHED' as const,
-      categories: { some: { categoryId: { in: categoryIds } } },
-      ...(isVideoCategory ? { videoUrl: { not: null } } : {}),
-    };
+    // Video archive: every published clip, including those pinned in other
+    // modules / assigned to other categories. Skip WordPress imports.
+    const postWhere = isVideoCategory
+      ? {
+          status: 'PUBLISHED' as const,
+          videoUrl: { not: null },
+          externalId: null,
+        }
+      : {
+          status: 'PUBLISHED' as const,
+          categories: { some: { categoryId: { in: categoryIds } } },
+        };
 
-    const [total, posts, resolved, categoryLayoutConfig] = await Promise.all([
+    const categoryLayoutConfig = !isVideoCategory ? await this.layout.getConfig('category') : null;
+    const layoutPageSize = categoryLayoutConfig
+      ? this.layout.categoryLayoutPageSize(categoryLayoutConfig)
+      : perPage;
+    const effectivePerPage = !isVideoCategory ? layoutPageSize : perPage;
+    const skip = (page - 1) * effectivePerPage;
+
+    const [total, posts, resolved] = await Promise.all([
       this.prisma.post.count({ where: postWhere }),
       this.prisma.post.findMany({
         where: postWhere,
         orderBy: { publishedAt: 'desc' },
         skip,
-        take: perPage,
+        take: effectivePerPage,
         include: {
           heroMedia: true,
-          pill: true,
+          postPills: { include: { pill: true } },
           author: true,
           categories: { include: { category: true } },
+          bulbi: {
+            orderBy: { sortOrder: 'asc' },
+            include: {
+              linkedPost: {
+                select: { id: true, slug: true, title: true, status: true, deletedAt: true },
+              },
+            },
+          },
         },
       }),
-      // Video category uses its own template; other categories use module layout on page 1.
-      page === 1 && !isVideoCategory
-        ? this.layout.resolveCategoryLayout(category.id)
+      // Video category uses its own template; others use the configured module layout.
+      !isVideoCategory
+        ? this.layout.resolveCategoryLayout(category.id, { skip })
         : Promise.resolve(null),
-      !isVideoCategory ? this.layout.getConfig('category') : Promise.resolve(null),
     ]);
 
     const categoryListModule = categoryLayoutConfig?.modules.find((mod) => mod.type === 'list');
     const showSummary = categoryListModule?.options?.showSummary ?? true;
+    const mappedPosts = posts.map((post) => mapPostSummary(post, { forceShowSummary: true }));
+
+    let modules = resolved?.modules ?? null;
+    let mobileOrder = resolved?.mobileOrder ?? [];
+    let mobileModules = resolved?.mobileModules ?? [];
+
+    // Page 2+ keeps the same sidebar but drops hero/grid/rows/etc. — main column is a list.
+    const hasMainLayout =
+      (resolved?.modules?.length ?? 0) > 0 || (resolved?.mobileModules?.length ?? 0) > 0;
+    if (page > 1 && resolved && hasMainLayout) {
+      const existingList = resolved.modules.find((mod) => mod.type === 'list');
+      const listId = existingList?.id ?? 'category-paged-list';
+      modules = [
+        {
+          id: listId,
+          type: 'list',
+          posts: mappedPosts.map((post) => ({
+            post,
+            showDate: post.showDate !== false,
+            showAuthor: post.showAuthor !== false,
+          })),
+          title: null,
+          showCategory: existingList?.showCategory ?? true,
+          showSummary,
+          hasMore: false,
+          typography: existingList?.typography,
+          backgroundColor: existingList?.backgroundColor,
+          summaryRows: existingList?.summaryRows,
+          summaryTypography: existingList?.summaryTypography,
+        },
+      ];
+      mobileOrder = [{ kind: 'module', ref: listId }];
+      mobileModules = [];
+    }
 
     return {
       id: category.id,
@@ -150,14 +210,15 @@ export class CategoriesService {
         color: child.color,
         menuOrder: child.menuOrder,
       })),
-      posts: posts.map((post) => mapPostSummary(post, { forceShowSummary: true })),
+      posts: mappedPosts,
       total,
       page,
-      perPage,
-      modules: resolved?.modules ?? null,
+      perPage: effectivePerPage,
+      modules,
       showSummary,
       sidebar: resolved?.sidebar ?? null,
-      mobileOrder: resolved?.mobileOrder ?? [],
+      mobileOrder,
+      mobileModules,
     };
   }
 
@@ -166,7 +227,7 @@ export class CategoriesService {
   async listAdmin() {
     const cats = await this.prisma.category.findMany({
       orderBy: [{ menuOrder: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { posts: true } } },
+      include: { _count: { select: { posts: { where: { post: { deletedAt: null } } } } } },
     });
     return cats.map((c) => ({
       id: c.id,
@@ -176,6 +237,8 @@ export class CategoriesService {
       description: c.description,
       parentId: c.parentId,
       showInMenu: c.showInMenu,
+      showInMobileMenu: c.showInMobileMenu,
+      showInMobileRow: c.showInMobileRow,
       menuOrder: c.menuOrder,
       postCount: c._count.posts,
     }));
@@ -195,6 +258,8 @@ export class CategoriesService {
           description: data.description ?? null,
           parentId: parentId ?? null,
           showInMenu: data.showInMenu ?? true,
+          showInMobileMenu: data.showInMobileMenu ?? true,
+          showInMobileRow: data.showInMobileRow ?? true,
           menuOrder: (max._max.menuOrder ?? 0) + 1,
         },
       });
@@ -227,6 +292,10 @@ export class CategoriesService {
           ...(data.description !== undefined ? { description: data.description } : {}),
           ...(parentId !== undefined ? { parentId } : {}),
           ...(data.showInMenu !== undefined ? { showInMenu: data.showInMenu } : {}),
+          ...(data.showInMobileMenu !== undefined
+            ? { showInMobileMenu: data.showInMobileMenu }
+            : {}),
+          ...(data.showInMobileRow !== undefined ? { showInMobileRow: data.showInMobileRow } : {}),
         },
       });
     } catch (err: unknown) {

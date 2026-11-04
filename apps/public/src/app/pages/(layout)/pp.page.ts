@@ -1,6 +1,7 @@
-import { Component, computed } from '@angular/core';
+import { Component, OnInit, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { injectLoad, type PageServerLoad } from '@analogjs/router';
+import { SeoService } from '../../services/seo.service';
 
 type PrivacyLoad = (args: PageServerLoad) => Promise<{ contentHtml: string }>;
 
@@ -14,8 +15,18 @@ type PrivacyLoad = (args: PageServerLoad) => Promise<{ contentHtml: string }>;
     </main>
   `,
 })
-export default class PrivacyPageComponent {
+export default class PrivacyPageComponent implements OnInit {
+  private seo = inject(SeoService);
   private loadData = toSignal(injectLoad<PrivacyLoad>());
+
+  ngOnInit() {
+    this.seo.applyStatic({
+      path: '/pp',
+      title: 'Protecția datelor – GDPR',
+      description: 'Politica de protecție a datelor personale (GDPR) pe Civicpress.',
+    });
+  }
+
   contentHtml = computed(
     () =>
       this.loadData()?.contentHtml ||

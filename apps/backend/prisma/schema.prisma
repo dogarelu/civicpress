@@ -12,6 +12,7 @@ datasource db {
 enum Role {
   AUTHOR
   EDITOR
+  CHIEF_EDITOR
   ADMIN
 }
 
@@ -29,18 +30,24 @@ model SiteSettings {
   id              String  @id @default("default")
   siteName        String  @default("Civicpress")
   tagline         String?
-  logoMediaId     String?
-  faviconMediaId  String?
+  logoMediaId          String?
+  mobileLogoMediaId    String?
+  faviconMediaId       String?
   primaryColor    String  @default("#8A0808")
   secondaryColor  String  @default("#1a1a1a")
   accentColor     String  @default("#c0392b")
   backgroundColor String  @default("#ffffff")
   textColor       String  @default("#2d2d2d")
   headingFont     String  @default("Roboto")
-  bodyFont        String  @default("Open Sans")
+  bodyFont        String  @default("Source Sans 3")
   headerMaxCategories Int @default(6)
   headerShowMoreDropdown Boolean @default(true)
   headerMoreCategoryIds String[] @default([])
+  tickerBgColor String @default("#8A0808")
+  tickerTextColor String @default("#FFFFFF")
+  tickerFontWeight Int @default(600)
+  /// TickerBarConfig[] — multiple header ticker bars. Null falls back to a single most-read bar.
+  tickerBars Json?
   newsTitleFontSize Int @default(20)
   newsTitleFontWeight Int @default(700)
   newsSummaryFontSize Int @default(14)
@@ -55,10 +62,28 @@ model SiteSettings {
   articleContentFontSize Int @default(17)
   articleContentFontWeight Int @default(400)
   showArticleViews Boolean @default(false)
+  /// 'time-if-today' | 'always-date'
+  postDateFormat String @default("time-if-today")
+  /// Image pill overlay: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
+  pillCorner       String  @default("top-right")
+  pillFontSize     Int     @default(12)
+  /// 0 = opaque, 100 = fully transparent (background only)
+  pillTransparency Int     @default(0)
   facebookUrl     String?
   twitterUrl      String?
   youtubeUrl      String?
   instagramUrl    String?
+  whatsappUrl     String?
+  tiktokUrl       String?
+  showFacebook    Boolean @default(false)
+  showTwitter     Boolean @default(false)
+  showYoutube     Boolean @default(false)
+  showInstagram   Boolean @default(false)
+  showWhatsapp    Boolean @default(false)
+  showTiktok      Boolean @default(false)
+  showSocialInHeader     Boolean @default(true)
+  showSocialInMobileMenu Boolean @default(true)
+  showSocialInFooter     Boolean @default(true)
   footerHtml      String?
   footerContactInfo String?
   contactPageHtml String?
@@ -66,8 +91,9 @@ model SiteSettings {
   privacyPageHtml String?
   cookiePageHtml  String?
 
-  logoMedia    Media? @relation("logo", fields: [logoMediaId], references: [id])
-  faviconMedia Media? @relation("favicon", fields: [faviconMediaId], references: [id])
+  logoMedia       Media? @relation("logo", fields: [logoMediaId], references: [id])
+  mobileLogoMedia Media? @relation("mobileLogo", fields: [mobileLogoMediaId], references: [id])
+  faviconMedia    Media? @relation("favicon", fields: [faviconMediaId], references: [id])
 }
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
@@ -98,9 +124,10 @@ model Media {
 
   owner           User?          @relation("mediaOwner", fields: [ownerId], references: [id])
   posts           Post[]         @relation("heroMedia")
-  settingsLogo    SiteSettings[] @relation("logo")
-  settingsFavicon SiteSettings[] @relation("favicon")
-  userAvatars     User[]         @relation("userAvatar")
+  settingsLogo       SiteSettings[] @relation("logo")
+  settingsMobileLogo SiteSettings[] @relation("mobileLogo")
+  settingsFavicon    SiteSettings[] @relation("favicon")
+  userAvatars        User[]         @relation("userAvatar")
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -142,8 +169,10 @@ model Category {
   color       String?
   description String?
   parentId    String?
-  showInMenu  Boolean @default(true)
-  menuOrder   Int     @default(0)
+  showInMenu       Boolean @default(true)
+  showInMobileMenu Boolean @default(true)
+  showInMobileRow  Boolean @default(true)
+  menuOrder        Int     @default(0)
   externalId  String? @unique
 
   parent   Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
@@ -154,13 +183,13 @@ model Category {
 // ─── Pill (image overlay badge) ───────────────────────────────────────────────
 
 model Pill {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   text      String
   color     String
-  textColor String   @default("#ffffff")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  posts     Post[]
+  textColor String    @default("#ffffff")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  postPills PostPill[]
 }
 
 // ─── Tag ──────────────────────────────────────────────────────────────────────
@@ -179,10 +208,11 @@ model Post {
   id             String     @id @default(cuid())
   title          String
   slug           String     @unique
+  /// Plain-text kicker shown above the title on the article page only.
+  kicker         String?
   excerpt        String?
   contentHtml    String     @default("")
   heroMediaId    String?
-  pillId         String?
   videoUrl       String?
   authorId       String?
   authorName     String?
@@ -190,6 +220,9 @@ model Post {
   showAuthor     Boolean    @default(true)
   showSummary    Boolean    @default(false)
   viewCount      Int        @default(0)
+  /// When true, auto-fill skips this post in homepage/category/article modules.
+  /// Explicit pins (e.g. video-list items) still resolve it.
+  excludeFromModules Boolean @default(false)
   status         PostStatus @default(DRAFT)
   scheduledFor   DateTime?
   submittedById  String?
@@ -200,17 +233,22 @@ model Post {
   externalId     String?    @unique
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+  /// Set when the article is moved to trash. Cleared on restore. Purged after 30 days.
+  deletedAt      DateTime?
 
   heroMedia   Media?         @relation("heroMedia", fields: [heroMediaId], references: [id])
-  pill        Pill?          @relation(fields: [pillId], references: [id], onDelete: SetNull)
   author      User?          @relation("postAuthor", fields: [authorId], references: [id])
   submittedBy User?          @relation("postSubmitter", fields: [submittedById], references: [id])
   approvedBy  User?          @relation("postApprover", fields: [approvedById], references: [id])
   categories  PostCategory[]
   tags        PostTag[]
-  bulbi       PostBulb[] @relation("PostBulbs")
-  bulbOfPosts PostBulb[] @relation("PostBulbLinks")
-  revisions   Revision[]
+  postPills   PostPill[]
+  bulbi         PostBulb[]         @relation("PostBulbs")
+  bulbOfPosts   PostBulb[]         @relation("PostBulbLinks")
+  photoCaptions PostPhotoCaption[]
+  revisions     Revision[]
+
+  @@index([deletedAt])
 }
 
 // ─── Join tables ──────────────────────────────────────────────────────────────
@@ -236,16 +274,45 @@ model PostTag {
   @@id([postId, tagId])
 }
 
+/// Image pill placements on a post (max 4; unique pill; unique corner when set).
+model PostPill {
+  postId String
+  pillId String
+  /// Corner; null only allowed when the post has exactly one pill (uses global default).
+  corner String?
+  /// 'smaller' | 'default' | 'bigger' — relative to the layout/global default size
+  size   String @default("default")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  pill Pill @relation(fields: [pillId], references: [id], onDelete: Cascade)
+
+  @@id([postId, pillId])
+  @@index([pillId])
+}
+
+/// Subtitle bullet ("bumb"): optional link to another article.
 model PostBulb {
-  postId        String
-  linkedPostId  String
-  sortOrder     Int
-  labelOverride String?
+  id           String  @id @default(cuid())
+  postId       String
+  linkedPostId String?
+  sortOrder    Int
+  label        String
 
-  post       Post @relation("PostBulbs", fields: [postId], references: [id], onDelete: Cascade)
-  linkedPost Post @relation("PostBulbLinks", fields: [linkedPostId], references: [id], onDelete: Cascade)
+  post       Post  @relation("PostBulbs", fields: [postId], references: [id], onDelete: Cascade)
+  linkedPost Post? @relation("PostBulbLinks", fields: [linkedPostId], references: [id], onDelete: SetNull)
 
-  @@id([postId, linkedPostId])
+  @@index([postId, sortOrder])
+}
+
+/// Caption under a photo on the article page, applied in document order.
+model PostPhotoCaption {
+  id        String @id @default(cuid())
+  postId    String
+  sortOrder Int
+  label     String
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
   @@index([postId, sortOrder])
 }
 
@@ -284,5 +351,57 @@ model AuditLog {
 
   @@index([entity, entityId, createdAt])
   @@index([actorId, createdAt])
+}
+
+// ─── Analytics (first-party) ──────────────────────────────────────────────────
+
+/// Simple UTM codes for share links (`?utm=code`), managed from admin share modal.
+model UtmPreset {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Browser session (client-generated id). First-touch UTM is sticky for the session.
+model AnalyticsSession {
+  id          String   @id
+  startedAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  /// Persistent anonymous visitor (localStorage). Distinct from short-lived sessionId.
+  visitorId   String?
+  /// Value of `?utm=` on first touch (null = no UTM).
+  utm         String?
+  utmPresetId String?
+  userAgent   String?
+
+  pageViews AnalyticsPageView[]
+
+  @@index([startedAt])
+  @@index([lastSeenAt])
+  @@index([visitorId])
+  @@index([utm])
+}
+
+model AnalyticsPageView {
+  id         String   @id
+  sessionId  String
+  path       String
+  pageType   String
+  postId     String?
+  title      String?
+  startedAt  DateTime @default(now())
+  durationMs Int      @default(0)
+  /// Denormalized first-touch UTM from the session (for aggregation).
+  utm        String?
+
+  session AnalyticsSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([path, startedAt])
+  @@index([postId, startedAt])
+  @@index([pageType, startedAt])
+  @@index([startedAt])
+  @@index([utm, startedAt])
 }
 

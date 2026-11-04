@@ -10,7 +10,7 @@ import { buildDefaultMobileOrder } from '@civicpress/shared';
 import { buildSidebarStream } from './sidebar-stream';
 import { findSidebarBlockForRef } from './mobile-sidebar-utils';
 
-const ROWS_MODULE_TYPES = new Set(['rows-3', 'rows-4', 'rows-4-sm']);
+const ROWS_MODULE_TYPES = new Set(['rows-3', 'rows-4', 'rows-4-sm', 'rows-5']);
 
 function postsFromModuleEntries(entries: ResolvedModulePost[]): PostSummary[] {
   return entries.map((entry) => entry.post);
@@ -25,6 +25,16 @@ export function collectModulePosts(
     const posts: PostSummary[] = [];
     for (const row of mod.rows ?? []) {
       for (const entry of row.posts) {
+        posts.push(entry.post);
+      }
+    }
+    return posts;
+  }
+
+  if (mod.type === 'category-columns') {
+    const posts: PostSummary[] = [];
+    for (const col of mod.columns ?? []) {
+      for (const entry of col.posts) {
         posts.push(entry.post);
       }
     }
@@ -93,11 +103,28 @@ export function buildMobilePostList(
           })),
           sidebar: {
             enabled: !!sidebar && sidebar.blocks.length > 0,
-            blocks: (sidebar?.blocks ?? []).map((b) =>
-              (b.mode === 'single-category' || b.mode === 'slideshow') && b.blockId
-                ? { mode: b.mode, id: b.blockId }
-                : b.mode,
-            ),
+            blocks: (sidebar?.blocks ?? []).map((b) => {
+              if (!b.blockId) return b.mode;
+              if (b.mode === 'single-category') {
+                return { mode: 'single-category' as const, id: b.blockId };
+              }
+              if (b.mode === 'slideshow') {
+                return { mode: 'slideshow' as const, id: b.blockId };
+              }
+              if (b.mode === 'featured-video') {
+                return { mode: 'featured-video' as const, id: b.blockId };
+              }
+              if (b.mode === 'featured-article') {
+                return { mode: 'featured-article' as const, id: b.blockId };
+              }
+              if (b.mode === 'featured-photo') {
+                return { mode: 'featured-photo' as const, id: b.blockId };
+              }
+              if (b.mode === 'featured-stack') {
+                return { mode: 'featured-stack' as const, id: b.blockId };
+              }
+              return b.mode;
+            }),
             slideshowCount: 5,
             latestCount: 10,
             videoCount: 5,
@@ -110,14 +137,35 @@ export function buildMobilePostList(
             articleListTitle: '',
             mostViewedCount: 5,
             mostViewedTitle: '',
+            mostViewedPeriod: 'year',
+            mostViewedShowCategory: true,
+            mostViewedCategoryId: null,
+            latestShowCategory: true,
             singleCategoryCount: 4,
             singleCategoryId: null,
             singleCategoryBlocks: {},
             singleCategoryBlockTypography: {},
+            singleCategoryBlockBackgroundColor: {},
             singleCategoryBlockSummarySettings: {},
             slideshowBlocks: {},
             slideshowBlockTypography: {},
+            slideshowBlockBackgroundColor: {},
             slideshowBlockSummarySettings: {},
+            featuredVideoBlocks: {},
+            featuredVideoBlockTypography: {},
+            featuredVideoBlockBackgroundColor: {},
+            featuredArticleBlocks: {},
+            featuredArticleBlockTypography: {},
+            featuredArticleBlockBackgroundColor: {},
+            featuredArticleBlockSummarySettings: {},
+            featuredPhotoBlocks: {},
+            featuredPhotoBlockTypography: {},
+            featuredPhotoBlockBackgroundColor: {},
+            featuredStackBlocks: {},
+            featuredStackBlockTypography: {},
+            featuredStackBlockBackgroundColor: {},
+            featuredStackBlockSummarySettings: {},
+            mostViewedBlocks: {},
             latestSlots: [],
             categorySlots: [],
             overlayListSlots: [],
@@ -125,11 +173,18 @@ export function buildMobilePostList(
             mostViewedSlots: [],
             singleCategorySlots: [],
             blockTypography: {},
+            blockBackgroundColor: {},
             blockSummarySettings: {},
+            stickyBlocks: [],
+            stickyFirstBlock: false,
+            stickyUntilModuleId: null,
           },
           mobileOrder: [],
+          mobileModules: [],
+          articleLayoutMode: 'classic',
           articleMainShowSummary: true,
           moduleTypographyPresets: {},
+          mobileModuleTypographyPresets: {},
         });
 
   const moduleById = new Map(modules.map((mod) => [mod.id, mod]));
@@ -174,11 +229,28 @@ export function resolveMobileOrderFromApi(
     })),
     sidebar: {
       enabled: !!sidebar && sidebar.blocks.length > 0,
-      blocks: (sidebar?.blocks ?? []).map((b) =>
-        (b.mode === 'single-category' || b.mode === 'slideshow') && b.blockId
-          ? { mode: b.mode, id: b.blockId }
-          : b.mode,
-      ),
+      blocks: (sidebar?.blocks ?? []).map((b) => {
+        if (!b.blockId) return b.mode;
+        if (b.mode === 'single-category') {
+          return { mode: 'single-category' as const, id: b.blockId };
+        }
+        if (b.mode === 'slideshow') {
+          return { mode: 'slideshow' as const, id: b.blockId };
+        }
+        if (b.mode === 'featured-video') {
+          return { mode: 'featured-video' as const, id: b.blockId };
+        }
+        if (b.mode === 'featured-article') {
+          return { mode: 'featured-article' as const, id: b.blockId };
+        }
+        if (b.mode === 'featured-photo') {
+          return { mode: 'featured-photo' as const, id: b.blockId };
+        }
+        if (b.mode === 'featured-stack') {
+          return { mode: 'featured-stack' as const, id: b.blockId };
+        }
+        return b.mode;
+      }),
       slideshowCount: 5,
       latestCount: 10,
       videoCount: 5,
@@ -191,14 +263,35 @@ export function resolveMobileOrderFromApi(
       articleListTitle: '',
       mostViewedCount: 5,
       mostViewedTitle: '',
+      mostViewedPeriod: 'year',
+      mostViewedShowCategory: true,
+      mostViewedCategoryId: null,
+      latestShowCategory: true,
       singleCategoryCount: 4,
       singleCategoryId: null,
       singleCategoryBlocks: {},
       singleCategoryBlockTypography: {},
+      singleCategoryBlockBackgroundColor: {},
       singleCategoryBlockSummarySettings: {},
       slideshowBlocks: {},
       slideshowBlockTypography: {},
+      slideshowBlockBackgroundColor: {},
       slideshowBlockSummarySettings: {},
+      featuredVideoBlocks: {},
+      featuredVideoBlockTypography: {},
+      featuredVideoBlockBackgroundColor: {},
+      featuredArticleBlocks: {},
+      featuredArticleBlockTypography: {},
+      featuredArticleBlockBackgroundColor: {},
+      featuredArticleBlockSummarySettings: {},
+      featuredPhotoBlocks: {},
+      featuredPhotoBlockTypography: {},
+      featuredPhotoBlockBackgroundColor: {},
+      featuredStackBlocks: {},
+      featuredStackBlockTypography: {},
+      featuredStackBlockBackgroundColor: {},
+      featuredStackBlockSummarySettings: {},
+      mostViewedBlocks: {},
       latestSlots: [],
       categorySlots: [],
       overlayListSlots: [],
@@ -206,11 +299,18 @@ export function resolveMobileOrderFromApi(
       mostViewedSlots: [],
       singleCategorySlots: [],
       blockTypography: {},
+      blockBackgroundColor: {},
       blockSummarySettings: {},
+      stickyBlocks: [],
+      stickyFirstBlock: false,
+      stickyUntilModuleId: null,
     },
     mobileOrder: [],
+    mobileModules: [],
+    articleLayoutMode: 'classic',
     articleMainShowSummary: true,
     moduleTypographyPresets: {},
+    mobileModuleTypographyPresets: {},
   });
 }
 

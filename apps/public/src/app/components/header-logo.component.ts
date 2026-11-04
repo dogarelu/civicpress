@@ -1,162 +1,150 @@
-import { Component, ElementRef, HostListener, Input, ViewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import type { PublicSettings, MenuItem, ExchangeRate } from '@civicpress/shared';
-import { ExchangeTickerComponent } from './exchange-ticker.component';
+import { Component, HostListener, Input, inject } from '@angular/core';
+import { CommonModule, NgTemplateOutlet } from '@angular/common';
+import { Router, RouterModule } from '@angular/router';
+import type { PublicSettings, MenuItem, PublicTickerBar } from '@civicpress/shared';
+import { TickerBarComponent } from './ticker-bar.component';
+import { SocialLinksComponent } from './social-links.component';
 
 @Component({
   selector: 'cp-header-logo',
   standalone: true,
-  imports: [CommonModule, RouterModule, ExchangeTickerComponent],
+  imports: [CommonModule, NgTemplateOutlet, RouterModule, TickerBarComponent, SocialLinksComponent],
   template: `
-    <header class="bg-white border-b border-gray-200 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
+    <header class="bg-white border-b border-gray-400 shadow-[0_1px_0_rgba(0,0,0,0.04)]">
       <div class="h-px w-full bg-black" aria-hidden="true"></div>
 
       <!-- Desktop rows -->
-      <div class="hidden md:block relative">
-        <!-- full-bleed red band behind the top row -->
-        <div
-          class="absolute inset-x-0 top-0 h-11 bg-[var(--color-primary)]"
-          aria-hidden="true"
-        ></div>
+      <div class="hidden md:block">
+        @if (aboveBar) {
+          <div
+            class="h-11"
+            [style.background-color]="aboveBar.bgColor"
+            [style.color]="aboveBar.textColor"
+          >
+            <div
+              class="container page-container mx-auto px-3 md:px-4 h-full flex items-center gap-3"
+            >
+              <ng-container *ngTemplateOutlet="headerBarInner; context: { $implicit: aboveBar }" />
+            </div>
+          </div>
+        }
 
-        <div
-          class="container page-container mx-auto px-3 md:px-4 relative z-10 flex items-stretch gap-3"
-        >
-          <!-- Logo bridges both rows -->
-          <a routerLink="/" class="relative z-30 flex shrink-0 items-center">
-            @if (settings?.logoUrl) {
-              <img
-                [src]="settings!.logoUrl!"
-                [alt]="settings?.siteName ?? 'Civicpress'"
-                class="h-[79px] w-auto max-w-none object-contain"
-                loading="eager"
-              />
-            } @else {
-              <span
-                class="text-3xl font-bold tracking-tight px-2 text-center"
-                style="color: var(--color-primary)"
-                >{{ settings?.siteName ?? 'Civicpress' }}</span
+        <div class="relative">
+          <div
+            class="absolute inset-x-0 top-0 h-11"
+            [style.background-color]="
+              logoTopBar?.bgColor || 'var(--ticker-bg, var(--color-primary))'
+            "
+            aria-hidden="true"
+          ></div>
+          <div
+            class="absolute inset-x-0 top-11 h-11"
+            [style.background-color]="logoBottomBar?.bgColor || '#ffffff'"
+            aria-hidden="true"
+          ></div>
+
+          <div
+            class="container page-container mx-auto px-3 md:px-4 relative z-10 flex items-stretch gap-3"
+          >
+            <a
+              routerLink="/"
+              (click)="onHomeIconClick($event)"
+              class="relative z-30 flex shrink-0 items-center"
+            >
+              @if (settings?.logoUrl) {
+                <img
+                  [src]="settings!.logoUrl!"
+                  [alt]="settings?.siteName ?? 'Civicpress'"
+                  class="h-[79px] w-auto max-w-none object-contain"
+                  loading="eager"
+                />
+              } @else {
+                <span
+                  class="text-3xl font-bold tracking-tight px-2 text-center"
+                  style="color: var(--color-primary)"
+                  >{{ settings?.siteName ?? 'Civicpress' }}</span
+                >
+              }
+            </a>
+
+            <div class="min-w-0 flex-1 flex flex-col">
+              <div
+                class="h-11 flex items-center gap-3 pr-2"
+                [style.color]="logoTopBar?.textColor || 'var(--ticker-text, #fff)'"
               >
-            }
-          </a>
-
-          <div class="min-w-0 flex-1 flex flex-col">
-            <!-- Top row: ticker + search -->
-            <div class="h-11 flex items-center text-white pr-2">
-              <div class="min-w-0 flex-1">
-                <cp-exchange-ticker [rates]="exchangeRates" [embedded]="true" />
-              </div>
-              <div class="ml-3 flex-shrink-0 flex items-center gap-2">
-                @if (searchOpen) {
-                  <input
-                    #searchInput
-                    type="search"
-                    [value]="searchQuery"
-                    (input)="onSearchInput($event)"
-                    (keydown.escape)="closeSearch()"
-                    placeholder="Caută..."
-                    aria-label="Introdu termenul de căutare"
-                    class="w-40 lg:w-56 rounded border border-white/40 bg-white px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+                @if (logoTopBar) {
+                  <ng-container
+                    *ngTemplateOutlet="headerBarInner; context: { $implicit: logoTopBar }"
                   />
                 }
-                <button
-                  type="button"
-                  aria-label="Caută"
-                  [attr.aria-expanded]="searchOpen"
-                  (click)="toggleSearch()"
-                  class="p-2 text-white/90 hover:text-white transition-colors rounded"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="18"
-                    height="18"
-                    fill="currentColor"
-                    viewBox="0 0 16 16"
-                  >
-                    <path
-                      d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"
-                    />
-                  </svg>
-                </button>
+              </div>
+              <div
+                class="h-11 flex items-center gap-3 pr-2 border-t border-black/10"
+                [style.color]="logoBottomBar?.textColor || '#374151'"
+              >
+                @if (logoBottomBar) {
+                  <ng-container
+                    *ngTemplateOutlet="headerBarInner; context: { $implicit: logoBottomBar }"
+                  />
+                }
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Bottom row: menu -->
-            <div class="h-11 flex items-center border-t border-gray-200">
-              <nav class="flex min-w-0 items-center justify-start">
-                <ul class="flex min-w-0 items-center gap-0 overflow-visible">
-                  @for (item of visibleItems; track item.id) {
-                    <li
-                      class="relative flex items-center"
-                      (mouseenter)="openDesktopChildren(item.id)"
-                      (mouseleave)="closeDesktopChildren(item.id)"
+        @if (belowBar) {
+          <div
+            class="h-11"
+            [style.background-color]="belowBar.bgColor"
+            [style.color]="belowBar.textColor"
+          >
+            <div
+              class="container page-container mx-auto px-3 md:px-4 h-full flex items-center gap-3"
+            >
+              <ng-container *ngTemplateOutlet="headerBarInner; context: { $implicit: belowBar }" />
+            </div>
+          </div>
+        }
+      </div>
+
+      <ng-template #headerBarInner let-bar>
+        <div class="min-w-0 flex-1 h-full flex items-center">
+          @if (bar.kind === 'ticker') {
+            <cp-ticker-bar class="block w-full h-full min-w-0" [bar]="bar" />
+          } @else {
+            <nav class="flex min-w-0 flex-1 items-center justify-start h-full">
+              <ul class="flex min-w-0 items-center gap-0 overflow-visible">
+                @for (item of visibleItemsFor(bar); track item.id) {
+                  <li
+                    class="relative flex items-center"
+                    (mouseenter)="openDesktopChildren(bar.id, item.id)"
+                    (mouseleave)="closeDesktopChildren(bar.id, item.id)"
+                  >
+                    <a
+                      [routerLink]="['/category', item.slug]"
+                      routerLinkActive="is-active"
+                      class="top-nav-link block px-3 py-2 uppercase tracking-wide whitespace-nowrap"
+                      [style.color]="bar.textColor"
+                      [style.font-size.px]="bar.fontSize"
+                      [style.font-weight]="bar.fontWeight"
                     >
-                      <a
-                        [routerLink]="['/category', item.slug]"
-                        routerLinkActive="is-active"
-                        class="top-nav-link block px-3 py-2 text-sm font-bold uppercase tracking-wide text-gray-700 whitespace-nowrap"
-                      >
-                        {{ item.name }}
-                      </a>
-                      @if (item.children?.length) {
-                        <button
-                          type="button"
-                          (click)="toggleDesktopChildren($event, item.id)"
-                          aria-label="Deschide subcategoriile"
-                          class="top-nav-link px-1 py-2 text-gray-500 hover:text-primary"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="12"
-                            height="12"
-                            fill="currentColor"
-                            viewBox="0 0 16 16"
-                            [class.rotate-180]="isDesktopChildrenOpen(item.id)"
-                            class="transition-transform"
-                          >
-                            <path
-                              fill-rule="evenodd"
-                              d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"
-                            />
-                          </svg>
-                        </button>
-                        @if (isDesktopChildrenOpen(item.id)) {
-                          <ul
-                            class="absolute left-0 top-full z-40 mt-1 min-w-[220px] rounded-sm border border-gray-200 bg-white py-1 shadow-lg"
-                          >
-                            @for (child of item.children; track child.id) {
-                              <li>
-                                <a
-                                  [routerLink]="['/category', child.slug]"
-                                  class="top-nav-dropdown-link block px-4 py-2 text-sm font-medium text-gray-700 whitespace-nowrap"
-                                >
-                                  {{ child.name }}
-                                </a>
-                              </li>
-                            }
-                          </ul>
-                        }
-                      }
-                    </li>
-                  }
-                  @if (overflowItems.length) {
-                    <li class="relative flex-shrink-0">
+                      {{ item.name }}
+                    </a>
+                    @if (item.children?.length) {
                       <button
                         type="button"
-                        (click)="toggleMore($event)"
-                        [attr.aria-expanded]="moreOpen"
-                        [class.is-active]="moreOpen"
-                        class="top-nav-link flex items-center gap-1 px-3 py-2 text-sm font-bold uppercase tracking-wide text-gray-700 whitespace-nowrap"
+                        (click)="toggleDesktopChildren($event, bar.id, item.id)"
+                        aria-label="Deschide subcategoriile"
+                        class="top-nav-link px-1 py-2"
+                        [style.color]="bar.textColor"
                       >
-                        Mai multe
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
                           width="12"
                           height="12"
                           fill="currentColor"
                           viewBox="0 0 16 16"
-                          [class.rotate-180]="moreOpen"
+                          [class.rotate-180]="isDesktopChildrenOpen(bar.id, item.id)"
                           class="transition-transform"
                         >
                           <path
@@ -165,77 +153,174 @@ import { ExchangeTickerComponent } from './exchange-ticker.component';
                           />
                         </svg>
                       </button>
-                      @if (moreOpen) {
-                        <div class="fixed inset-0 z-30" (click)="closeMore()"></div>
+                      @if (isDesktopChildrenOpen(bar.id, item.id)) {
                         <ul
-                          class="absolute left-0 top-full z-40 mt-1 min-w-[200px] max-h-[70vh] overflow-y-auto rounded-sm border border-gray-200 bg-white py-1 shadow-lg"
+                          class="absolute left-0 top-full z-40 mt-1 min-w-[220px] rounded-sm border border-gray-200 bg-white py-1 shadow-lg"
                         >
-                          @for (item of overflowItems; track item.id) {
+                          @for (child of item.children; track child.id) {
                             <li>
                               <a
-                                [routerLink]="['/category', item.slug]"
-                                (click)="closeMore()"
-                                routerLinkActive="is-active"
+                                [routerLink]="['/category', child.slug]"
                                 class="top-nav-dropdown-link block px-4 py-2 text-sm font-medium text-gray-700 whitespace-nowrap"
                               >
-                                {{ item.name }}
+                                {{ child.name }}
                               </a>
-                              @if (item.children?.length) {
-                                <ul class="pb-1">
-                                  @for (child of item.children; track child.id) {
-                                    <li>
-                                      <a
-                                        [routerLink]="['/category', child.slug]"
-                                        (click)="closeMore()"
-                                        class="top-nav-dropdown-link block pl-8 pr-4 py-1.5 text-xs font-medium text-gray-600 whitespace-nowrap"
-                                      >
-                                        {{ child.name }}
-                                      </a>
-                                    </li>
-                                  }
-                                </ul>
-                              }
                             </li>
                           }
                         </ul>
                       }
-                    </li>
-                  }
-                </ul>
-              </nav>
-            </div>
-          </div>
+                    }
+                  </li>
+                }
+                @if (overflowItemsFor(bar).length) {
+                  <li class="relative flex-shrink-0">
+                    <button
+                      type="button"
+                      (click)="toggleMore($event, bar.id)"
+                      [attr.aria-expanded]="isMoreOpen(bar.id)"
+                      [class.is-active]="isMoreOpen(bar.id)"
+                      class="top-nav-link flex items-center gap-1 px-3 py-2 uppercase tracking-wide whitespace-nowrap"
+                      [style.color]="bar.textColor"
+                      [style.font-size.px]="bar.fontSize"
+                      [style.font-weight]="bar.fontWeight"
+                    >
+                      Mai multe
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        fill="currentColor"
+                        viewBox="0 0 16 16"
+                        [class.rotate-180]="isMoreOpen(bar.id)"
+                        class="transition-transform"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"
+                        />
+                      </svg>
+                    </button>
+                    @if (isMoreOpen(bar.id)) {
+                      <div class="fixed inset-0 z-30" (click)="closeMore()"></div>
+                      <ul
+                        class="absolute left-0 top-full z-40 mt-1 min-w-[200px] max-h-[70vh] overflow-y-auto rounded-sm border border-gray-200 bg-white py-1 shadow-lg"
+                      >
+                        @for (item of overflowItemsFor(bar); track item.id) {
+                          <li>
+                            <a
+                              [routerLink]="['/category', item.slug]"
+                              (click)="closeMore()"
+                              routerLinkActive="is-active"
+                              class="top-nav-dropdown-link block px-4 py-2 text-sm font-medium text-gray-700 whitespace-nowrap"
+                            >
+                              {{ item.name }}
+                            </a>
+                            @if (item.children?.length) {
+                              <ul class="pb-1">
+                                @for (child of item.children; track child.id) {
+                                  <li>
+                                    <a
+                                      [routerLink]="['/category', child.slug]"
+                                      (click)="closeMore()"
+                                      class="top-nav-dropdown-link block pl-8 pr-4 py-1.5 text-xs font-medium text-gray-600 whitespace-nowrap"
+                                    >
+                                      {{ child.name }}
+                                    </a>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </li>
+                }
+              </ul>
+            </nav>
+          }
         </div>
-      </div>
-
-      <!-- Mobile -->
-      <div class="container page-container mx-auto px-3 md:px-4">
-        <div class="flex md:hidden h-14 items-center justify-between gap-3">
-          <a routerLink="/" class="flex-shrink-0 block">
-            @if (settings?.logoUrl) {
-              <img
-                [src]="settings!.logoUrl!"
-                [alt]="settings?.siteName ?? 'Civicpress'"
-                class="h-10 w-auto object-contain"
-                loading="eager"
-              />
-            } @else {
-              <span class="text-xl font-bold tracking-tight" style="color: var(--color-primary)">{{
-                settings?.siteName ?? 'Civicpress'
-              }}</span>
+        @if (bar.showSearch) {
+          <div class="flex-shrink-0 flex items-center gap-2">
+            @if (searchOpen && searchBarId === bar.id) {
+              <form (submit)="submitSearch($event)" class="contents">
+                <input
+                  type="search"
+                  [attr.data-header-search]="bar.id"
+                  [value]="searchQuery"
+                  (input)="onSearchInput($event)"
+                  (keydown.escape)="closeSearch()"
+                  placeholder="Caută..."
+                  aria-label="Introdu termenul de căutare"
+                  class="w-40 lg:w-56 rounded border border-white/40 bg-white px-3 py-1.5 text-sm text-gray-800 placeholder:text-gray-500 focus:border-white focus:outline-none focus:ring-1 focus:ring-white"
+                />
+              </form>
             }
-          </a>
-
-          <div class="flex items-center gap-2">
             <button
               type="button"
-              aria-label="Meniu"
+              aria-label="Caută"
+              [attr.aria-expanded]="searchOpen && searchBarId === bar.id"
+              (click)="toggleSearch(bar.id)"
+              class="p-2 opacity-90 hover:opacity-100 transition-opacity rounded"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                fill="currentColor"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"
+                />
+              </svg>
+            </button>
+          </div>
+        }
+        @if (showSocialOn(bar)) {
+          <cp-social-links
+            class="flex-shrink-0"
+            [settings]="settings"
+            variant="header"
+            placement="header"
+            [inheritColor]="true"
+          />
+        }
+      </ng-template>
+
+      <!-- Mobile -->
+      <div class="md:hidden">
+        <div class="bg-[var(--color-primary)] text-white">
+          <div
+            class="container page-container mx-auto px-3 flex h-12 items-center justify-between gap-3"
+          >
+            <a
+              routerLink="/"
+              (click)="onHomeIconClick($event); closeMobileMenu(); closeMobileRowChildren()"
+              class="flex-shrink-0 block min-w-0"
+            >
+              @if (mobileLogoUrl) {
+                <img
+                  [src]="mobileLogoUrl"
+                  [alt]="settings?.siteName ?? 'Civicpress'"
+                  class="h-8 w-auto max-w-[220px] object-contain"
+                  loading="eager"
+                />
+              } @else {
+                <span class="text-lg font-bold tracking-tight text-white">{{
+                  settings?.siteName ?? 'Civicpress'
+                }}</span>
+              }
+            </a>
+
+            <button
+              type="button"
+              [attr.aria-label]="mobileMenuOpen ? 'Închide meniul' : 'Deschide meniul'"
               [attr.aria-expanded]="mobileMenuOpen"
               (click)="toggleMobileMenu()"
-              class="p-2 text-gray-700 hover:text-primary transition-colors rounded"
+              class="p-2 text-white/90 hover:text-white transition-colors rounded"
             >
               @if (mobileMenuOpen) {
-                <!-- X icon -->
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="22"
@@ -248,7 +333,6 @@ import { ExchangeTickerComponent } from './exchange-ticker.component';
                   />
                 </svg>
               } @else {
-                <!-- Hamburger icon -->
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="22"
@@ -265,98 +349,167 @@ import { ExchangeTickerComponent } from './exchange-ticker.component';
             </button>
           </div>
         </div>
-      </div>
 
-      <!-- Mobile dropdown menu -->
-      @if (mobileMenuOpen) {
-        <div class="md:hidden border-t border-gray-200 bg-white shadow-md">
-          <!-- Search row -->
-          <div class="px-3 md:px-4 py-3 border-b border-gray-100">
-            <div
-              class="flex items-center gap-2 rounded border border-gray-300 px-3 py-2 bg-gray-50"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                fill="currentColor"
-                class="text-gray-400 flex-shrink-0"
-                viewBox="0 0 16 16"
-              >
-                <path
-                  d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"
-                />
-              </svg>
-              <input
-                #mobileSearchInput
-                type="search"
-                placeholder="Caută..."
-                aria-label="Caută"
-                class="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-400 outline-none"
-              />
-            </div>
-          </div>
-          <!-- Nav links -->
-          <nav>
-            <ul class="py-1">
-              @for (item of allMobileItems; track item.id) {
-                <li>
-                  <div class="border-b border-gray-100 last:border-b-0">
-                    <div class="flex items-center">
-                      <a
-                        [routerLink]="['/category', item.slug]"
-                        routerLinkActive="mobile-nav-active"
-                        (click)="closeMobileMenu()"
-                        class="mobile-nav-link flex-1 block px-5 py-3 text-sm font-bold uppercase tracking-wide text-gray-700"
-                        >{{ item.name }}</a
+        @if (mobileRowItems.length) {
+          <div class="border-t border-gray-400 relative">
+            <nav class="overflow-x-auto scrollbar-none" aria-label="Rând categorii">
+              <ul class="flex items-center gap-0 px-2 min-w-min">
+                @for (item of mobileRowItems; track item.id) {
+                  <li class="relative flex items-center flex-shrink-0">
+                    <a
+                      [routerLink]="['/category', item.slug]"
+                      routerLinkActive="is-active"
+                      (click)="closeMobileRowChildren()"
+                      class="top-nav-link block px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-gray-700 whitespace-nowrap"
+                    >
+                      {{ item.name }}
+                    </a>
+                    @if (item.children?.length) {
+                      <button
+                        type="button"
+                        (click)="toggleMobileRowChildren($event, item.id)"
+                        [attr.aria-expanded]="isMobileRowChildrenOpen(item.id)"
+                        aria-label="Deschide subcategoriile"
+                        class="top-nav-link px-1 py-2.5 text-gray-500"
                       >
-                      @if (item.children?.length) {
-                        <button
-                          type="button"
-                          (click)="toggleMobileChildren(item.id)"
-                          [attr.aria-expanded]="isMobileChildrenOpen(item.id)"
-                          class="px-4 py-3 text-gray-500"
-                          aria-label="Deschide subcategoriile"
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="11"
+                          height="11"
+                          fill="currentColor"
+                          viewBox="0 0 16 16"
+                          [class.rotate-180]="isMobileRowChildrenOpen(item.id)"
+                          class="transition-transform"
                         >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="12"
-                            height="12"
-                            fill="currentColor"
-                            viewBox="0 0 16 16"
-                            [class.rotate-180]="isMobileChildrenOpen(item.id)"
-                            class="transition-transform"
-                          >
-                            <path
-                              fill-rule="evenodd"
-                              d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"
-                            />
-                          </svg>
-                        </button>
-                      }
-                    </div>
-                    @if (item.children?.length && isMobileChildrenOpen(item.id)) {
-                      <ul class="pb-2">
-                        @for (child of item.children; track child.id) {
-                          <li>
-                            <a
-                              [routerLink]="['/category', child.slug]"
-                              (click)="closeMobileMenu()"
-                              class="mobile-nav-link block pl-9 pr-5 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600"
-                            >
-                              {{ child.name }}
-                            </a>
-                          </li>
-                        }
-                      </ul>
+                          <path
+                            fill-rule="evenodd"
+                            d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"
+                          />
+                        </svg>
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            </nav>
+
+            @if (mobileRowOpenChildrenId; as openId) {
+              <div class="fixed inset-0 z-30" (click)="closeMobileRowChildren()"></div>
+              @for (item of mobileRowItems; track item.id) {
+                @if (item.id === openId && item.children?.length) {
+                  <ul
+                    class="absolute left-2 right-2 top-full z-40 mt-0 max-h-[60vh] overflow-y-auto rounded-sm border border-gray-200 bg-white py-1 shadow-lg"
+                  >
+                    @for (child of item.children; track child.id) {
+                      <li>
+                        <a
+                          [routerLink]="['/category', child.slug]"
+                          (click)="closeMobileRowChildren()"
+                          class="top-nav-dropdown-link block px-4 py-2.5 text-sm font-medium text-gray-700"
+                        >
+                          {{ child.name }}
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                }
+              }
+            }
+          </div>
+        }
+
+        @if (mobileMenuOpen) {
+          <nav class="border-t border-black/10 bg-white" aria-label="Meniu categorii">
+            <form
+              (submit)="submitMobileSearch($event)"
+              class="relative border-b border-gray-400 p-3"
+            >
+              <input
+                type="search"
+                [value]="mobileSearchQuery"
+                (input)="onMobileSearchInput($event)"
+                placeholder="Caută..."
+                aria-label="Introdu termenul de căutare"
+                class="w-full rounded border border-gray-300 bg-white py-2 pl-3 pr-10 text-sm text-gray-800 placeholder:text-gray-500 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button
+                type="submit"
+                aria-label="Caută"
+                class="absolute right-5 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-primary"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  fill="currentColor"
+                  viewBox="0 0 16 16"
+                >
+                  <path
+                    d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"
+                  />
+                </svg>
+              </button>
+            </form>
+
+            <ul class="max-h-[70vh] overflow-y-auto py-1">
+              @for (item of mobileMenuItems; track item.id) {
+                <li class="border-b border-gray-100 last:border-b-0">
+                  <div class="flex items-center">
+                    <a
+                      [routerLink]="['/category', item.slug]"
+                      routerLinkActive="is-active"
+                      (click)="closeMobileMenu()"
+                      class="top-nav-link min-w-0 flex-1 px-4 py-3 text-sm font-bold uppercase tracking-wide text-gray-700"
+                    >
+                      {{ item.name }}
+                    </a>
+                    @if (item.children?.length) {
+                      <button
+                        type="button"
+                        (click)="toggleMobileChildren($event, item.id)"
+                        [attr.aria-expanded]="isMobileChildrenOpen(item.id)"
+                        aria-label="Deschide subcategoriile"
+                        class="px-4 py-3 text-gray-500"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="12"
+                          height="12"
+                          fill="currentColor"
+                          viewBox="0 0 16 16"
+                          [class.rotate-180]="isMobileChildrenOpen(item.id)"
+                          class="transition-transform"
+                        >
+                          <path
+                            fill-rule="evenodd"
+                            d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"
+                          />
+                        </svg>
+                      </button>
                     }
                   </div>
+                  @if (isMobileChildrenOpen(item.id) && item.children?.length) {
+                    <ul class="bg-gray-50 pb-1">
+                      @for (child of item.children; track child.id) {
+                        <li>
+                          <a
+                            [routerLink]="['/category', child.slug]"
+                            (click)="closeMobileMenu()"
+                            class="top-nav-dropdown-link block px-8 py-2.5 text-sm font-medium text-gray-700"
+                          >
+                            {{ child.name }}
+                          </a>
+                        </li>
+                      }
+                    </ul>
+                  }
                 </li>
               }
             </ul>
+            <cp-social-links [settings]="settings" variant="mobile" placement="mobile" />
           </nav>
-        </div>
-      }
+        }
+      </div>
     </header>
   `,
   styles: [
@@ -419,146 +572,244 @@ import { ExchangeTickerComponent } from './exchange-ticker.component';
         transform: translateY(1px);
       }
 
-      .mobile-nav-link {
-        transition:
-          color 150ms ease,
-          background-color 150ms ease;
+      .scrollbar-none {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
       }
 
-      .mobile-nav-link:hover,
-      .mobile-nav-link.mobile-nav-active {
-        color: var(--color-primary, #1d4ed8);
-        background-color: rgba(0, 0, 0, 0.03);
+      .scrollbar-none::-webkit-scrollbar {
+        display: none;
       }
     `,
   ],
 })
 export class HeaderLogoComponent {
+  private router = inject(Router);
+
   @Input() settings: PublicSettings | null = null;
   @Input() menuItems: MenuItem[] = [];
-  @Input() exchangeRates: ExchangeRate[] = [];
-  @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
+  @Input() mobileMenuItems: MenuItem[] = [];
+  @Input() mobileRowItems: MenuItem[] = [];
+  @Input() tickerBars: PublicTickerBar[] = [];
 
-  moreOpen = false;
+  moreOpenBarId: string | null = null;
   searchOpen = false;
+  searchBarId: string | null = null;
   searchQuery = '';
   mobileMenuOpen = false;
-  desktopOpenChildrenId: string | null = null;
-  mobileOpenChildrenIds = new Set<string>();
+  mobileSearchQuery = '';
+  desktopOpenKey: string | null = null;
+  mobileOpenChildrenId: string | null = null;
+  mobileRowOpenChildrenId: string | null = null;
 
-  private get maxCategories(): number {
-    const max = this.settings?.headerMaxCategories ?? 6;
-    return max > 0 ? max : 6;
+  get mobileLogoUrl(): string | null {
+    return this.settings?.mobileLogoUrl || this.settings?.logoUrl || null;
   }
 
-  private get explicitDropdownItems(): MenuItem[] {
-    if (!this.settings?.headerShowMoreDropdown) return [];
-    const selectedIds = this.settings.headerMoreCategoryIds ?? [];
+  get aboveBar(): PublicTickerBar | null {
+    return this.barBySlot('above');
+  }
+
+  get logoTopBar(): PublicTickerBar | null {
+    return this.barBySlot('logo-top');
+  }
+
+  get logoBottomBar(): PublicTickerBar | null {
+    return this.barBySlot('logo-bottom');
+  }
+
+  get belowBar(): PublicTickerBar | null {
+    return this.barBySlot('below');
+  }
+
+  private barBySlot(slot: PublicTickerBar['slot']): PublicTickerBar | null {
+    const found = this.tickerBars.find((bar) => bar.slot === slot);
+    if (found) return found;
+    const hasSlots = this.tickerBars.some((bar) => !!bar.slot);
+    if (hasSlots) return null;
+    return slot === 'logo-top' ? (this.tickerBars[0] ?? null) : null;
+  }
+
+  showSocialOn(bar: PublicTickerBar): boolean {
+    return bar.showSocial && this.settings?.showSocialInHeader !== false;
+  }
+
+  visibleItemsFor(bar: PublicTickerBar): MenuItem[] {
+    const items = bar.menuItems ?? [];
+    const max = bar.headerMaxCategories > 0 ? bar.headerMaxCategories : 6;
+    if (!bar.headerShowMoreDropdown) return items.slice(0, max);
+    const explicit = this.explicitOverflowFor(bar);
+    if (explicit.length) {
+      const dropdownIds = new Set(explicit.map((item) => item.id));
+      return items.filter((item) => !dropdownIds.has(item.id));
+    }
+    return items.slice(0, max);
+  }
+
+  overflowItemsFor(bar: PublicTickerBar): MenuItem[] {
+    if (!bar.headerShowMoreDropdown) return [];
+    const explicit = this.explicitOverflowFor(bar);
+    if (explicit.length) return explicit;
+    const items = bar.menuItems ?? [];
+    const max = bar.headerMaxCategories > 0 ? bar.headerMaxCategories : 6;
+    return items.slice(max);
+  }
+
+  private explicitOverflowFor(bar: PublicTickerBar): MenuItem[] {
+    const selectedIds = bar.headerMoreCategoryIds ?? [];
     if (!selectedIds.length) return [];
     const selectedSet = new Set(selectedIds);
-    return this.menuItems.filter((item) => selectedSet.has(item.id));
+    return (bar.menuItems ?? []).filter((item) => selectedSet.has(item.id));
   }
 
-  private get hasExplicitDropdownSelection(): boolean {
-    return this.explicitDropdownItems.length > 0;
-  }
-
-  private get cappedMenuItems(): MenuItem[] {
-    return this.menuItems.slice(0, this.maxCategories);
-  }
-
-  get visibleItems(): MenuItem[] {
-    if (!this.settings?.headerShowMoreDropdown) return this.cappedMenuItems;
-    if (this.hasExplicitDropdownSelection) {
-      const dropdownIds = new Set(this.explicitDropdownItems.map((item) => item.id));
-      return this.menuItems.filter((item) => !dropdownIds.has(item.id));
-    }
-    return this.cappedMenuItems;
-  }
-
-  get overflowItems(): MenuItem[] {
-    if (!this.settings?.headerShowMoreDropdown) return [];
-    if (this.hasExplicitDropdownSelection) return this.explicitDropdownItems;
-    return this.menuItems.slice(this.maxCategories);
-  }
-
-  /** All items for the mobile menu — flat list, no overflow grouping. */
-  get allMobileItems(): MenuItem[] {
-    return this.settings?.headerShowMoreDropdown ? this.menuItems : this.cappedMenuItems;
-  }
-
-  toggleMore(event: Event) {
+  toggleMore(event: Event, barId: string) {
     event.stopPropagation();
-    this.moreOpen = !this.moreOpen;
-    if (!this.moreOpen) this.desktopOpenChildrenId = null;
+    this.moreOpenBarId = this.moreOpenBarId === barId ? null : barId;
+    if (!this.moreOpenBarId) this.desktopOpenKey = null;
+  }
+
+  isMoreOpen(barId: string) {
+    return this.moreOpenBarId === barId;
   }
 
   closeMore() {
-    this.moreOpen = false;
-    this.desktopOpenChildrenId = null;
+    this.moreOpenBarId = null;
+    this.desktopOpenKey = null;
   }
 
-  toggleDesktopChildren(event: Event, id: string) {
+  private childKey(barId: string, itemId: string) {
+    return `${barId}:${itemId}`;
+  }
+
+  toggleDesktopChildren(event: Event, barId: string, itemId: string) {
     event.stopPropagation();
-    this.desktopOpenChildrenId = this.desktopOpenChildrenId === id ? null : id;
+    const key = this.childKey(barId, itemId);
+    this.desktopOpenKey = this.desktopOpenKey === key ? null : key;
   }
 
-  openDesktopChildren(id: string) {
-    this.desktopOpenChildrenId = id;
+  openDesktopChildren(barId: string, itemId: string) {
+    this.desktopOpenKey = this.childKey(barId, itemId);
   }
 
-  closeDesktopChildren(id: string) {
-    if (this.desktopOpenChildrenId === id) this.desktopOpenChildrenId = null;
+  closeDesktopChildren(barId: string, itemId: string) {
+    if (this.desktopOpenKey === this.childKey(barId, itemId)) this.desktopOpenKey = null;
   }
 
-  isDesktopChildrenOpen(id: string) {
-    return this.desktopOpenChildrenId === id;
+  isDesktopChildrenOpen(barId: string, itemId: string) {
+    return this.desktopOpenKey === this.childKey(barId, itemId);
   }
 
-  toggleSearch() {
-    this.searchOpen = !this.searchOpen;
-    if (this.searchOpen) {
-      setTimeout(() => this.searchInput?.nativeElement.focus(), 0);
-    } else {
-      this.searchQuery = '';
+  toggleSearch(barId: string) {
+    if (this.searchOpen && this.searchBarId === barId) {
+      if (this.searchQuery.trim()) {
+        this.navigateToSearch(this.searchQuery);
+        this.searchQuery = '';
+      }
+      this.searchOpen = false;
+      this.searchBarId = null;
+      return;
     }
+    this.searchOpen = true;
+    this.searchBarId = barId;
+    setTimeout(() => {
+      const input = document.querySelector<HTMLInputElement>(`[data-header-search="${barId}"]`);
+      input?.focus();
+    }, 0);
   }
 
   closeSearch() {
     this.searchOpen = false;
+    this.searchBarId = null;
   }
 
   onSearchInput(event: Event) {
     this.searchQuery = (event.target as HTMLInputElement).value;
   }
 
+  submitSearch(event: Event) {
+    event.preventDefault();
+    this.navigateToSearch(this.searchQuery);
+    this.searchOpen = false;
+  }
+
   toggleMobileMenu() {
     this.mobileMenuOpen = !this.mobileMenuOpen;
-    if (!this.mobileMenuOpen) this.mobileOpenChildrenIds.clear();
+    if (this.mobileMenuOpen) {
+      this.closeMobileRowChildren();
+    } else {
+      this.closeMobileChildren();
+      this.mobileSearchQuery = '';
+    }
   }
 
   closeMobileMenu() {
     this.mobileMenuOpen = false;
-    this.mobileOpenChildrenIds.clear();
+    this.closeMobileChildren();
+    this.mobileSearchQuery = '';
   }
 
-  toggleMobileChildren(id: string) {
-    if (this.mobileOpenChildrenIds.has(id)) {
-      this.mobileOpenChildrenIds.delete(id);
-    } else {
-      this.mobileOpenChildrenIds.add(id);
-    }
+  onMobileSearchInput(event: Event) {
+    this.mobileSearchQuery = (event.target as HTMLInputElement).value;
+  }
+
+  submitMobileSearch(event: Event) {
+    event.preventDefault();
+    this.navigateToSearch(this.mobileSearchQuery);
+    this.closeMobileMenu();
+  }
+
+  private navigateToSearch(rawQuery: string) {
+    const q = rawQuery.trim();
+    if (!q) return;
+    this.router.navigate(['/search'], { queryParams: { q } });
+  }
+
+  toggleMobileChildren(event: Event, id: string) {
+    event.stopPropagation();
+    this.mobileOpenChildrenId = this.mobileOpenChildrenId === id ? null : id;
+  }
+
+  closeMobileChildren() {
+    this.mobileOpenChildrenId = null;
   }
 
   isMobileChildrenOpen(id: string) {
-    return this.mobileOpenChildrenIds.has(id);
+    return this.mobileOpenChildrenId === id;
+  }
+
+  toggleMobileRowChildren(event: Event, id: string) {
+    event.stopPropagation();
+    this.closeMobileChildren();
+    this.mobileRowOpenChildrenId = this.mobileRowOpenChildrenId === id ? null : id;
+  }
+
+  closeMobileRowChildren() {
+    this.mobileRowOpenChildrenId = null;
+  }
+
+  isMobileRowChildrenOpen(id: string) {
+    return this.mobileRowOpenChildrenId === id;
+  }
+
+  onHomeIconClick(event: Event) {
+    if (!this.isOnHomePage()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    window.location.reload();
+  }
+
+  private isOnHomePage(): boolean {
+    const browserPath = window.location.pathname.replace(/\/+$/, '') || '/';
+    if (browserPath === '/') return true;
+    const path = this.router.url.split('?')[0].split('#')[0];
+    return path === '/' || path === '';
   }
 
   @HostListener('document:keydown.escape')
   onEscape() {
-    this.mobileMenuOpen = false;
-    this.moreOpen = false;
-    this.desktopOpenChildrenId = null;
-    this.mobileOpenChildrenIds.clear();
+    this.closeMore();
+    this.closeSearch();
+    this.closeMobileMenu();
+    this.closeMobileRowChildren();
   }
 }
