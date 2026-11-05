@@ -235,8 +235,12 @@ model Post {
   updatedAt      DateTime   @updatedAt
   /// Set when the article is moved to trash. Cleared on restore. Purged after 30 days.
   deletedAt      DateTime?
+  /// Article shown beside this one on its page. The sibling's own page stays single.
+  siblingPostId  String?
 
   heroMedia   Media?         @relation("heroMedia", fields: [heroMediaId], references: [id])
+  siblingPost Post?          @relation("PostSibling", fields: [siblingPostId], references: [id], onDelete: SetNull)
+  siblingOf   Post[]         @relation("PostSibling")
   author      User?          @relation("postAuthor", fields: [authorId], references: [id])
   submittedBy User?          @relation("postSubmitter", fields: [submittedById], references: [id])
   approvedBy  User?          @relation("postApprover", fields: [approvedById], references: [id])
@@ -249,6 +253,7 @@ model Post {
   revisions     Revision[]
 
   @@index([deletedAt])
+  @@index([siblingPostId])
 }
 
 // ─── Join tables ──────────────────────────────────────────────────────────────

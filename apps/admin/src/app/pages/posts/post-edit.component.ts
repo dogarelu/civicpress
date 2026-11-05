@@ -622,6 +622,57 @@ function buildPlacementOptions(
             </div>
           </div>
 
+          <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h2 class="text-sm font-semibold text-gray-700 mb-1">Frate</h2>
+            <p class="text-xs text-gray-400 mb-3">
+              Pe pagina acestui articol apar ambele, unul lângă altul. Pagina fratelui rămâne un
+              articol singur.
+            </p>
+            @if (siblingPost; as sibling) {
+              <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded text-sm">
+                <div class="flex items-start gap-2">
+                  <div class="flex-1 min-w-0">
+                    <div class="font-medium text-gray-800">{{ sibling.title }}</div>
+                    @if (sibling.status && sibling.status !== 'PUBLISHED') {
+                      <p class="mt-1 text-xs text-amber-700">
+                        Nu apare pe site până când este publicat.
+                      </p>
+                    }
+                  </div>
+                  <button
+                    type="button"
+                    (click)="clearSibling()"
+                    class="text-gray-400 hover:text-red-600 text-lg leading-none"
+                    aria-label="Elimină fratele"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            } @else if (pickingSibling) {
+              <cp-post-picker
+                label="Caută articolul frate"
+                [inline]="true"
+                (selected)="onSiblingSelected($event)"
+              />
+              <button
+                type="button"
+                (click)="pickingSibling = false"
+                class="mt-2 text-xs text-gray-500 hover:text-gray-700"
+              >
+                Anulează
+              </button>
+            } @else {
+              <button
+                type="button"
+                (click)="pickingSibling = true"
+                class="w-full py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Adaugă frate
+              </button>
+            }
+          </div>
+
           <!-- Hero image -->
           <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <h2 class="text-sm font-semibold text-gray-700 mb-3">Imagine principală</h2>
@@ -1131,6 +1182,8 @@ export class PostEditComponent implements OnInit {
   videoUrl = '';
   bulbi: EditableBulb[] = [];
   photoCaptions: EditablePhotoCaption[] = [];
+  siblingPost: { id: string; title: string; status?: string } | null = null;
+  pickingSibling = false;
   private publishedAtIso: string | null = null;
   previewOpen = signal(false);
   previewing = signal(false);
@@ -1234,6 +1287,8 @@ export class PostEditComponent implements OnInit {
         this.showAuthor = (post['showAuthor'] as boolean | undefined) ?? true;
         this.bulbi = this.mapBulbiFromPost(post['bulbi']);
         this.photoCaptions = this.mapPhotoCaptionsFromPost(post['photoCaptions']);
+        this.siblingPost = this.mapSiblingFromPost(post['siblingPost']);
+        this.pickingSibling = false;
         this.showSummary =
           (post['showSummary'] as boolean | undefined) ??
           (this.bulbi.length > 0 || !!this.excerpt.trim());
@@ -1280,6 +1335,8 @@ export class PostEditComponent implements OnInit {
       this.postTime = this.resolvePostTime(this.publishedAtIso);
       this.bulbi = [];
       this.photoCaptions = [];
+      this.siblingPost = null;
+      this.pickingSibling = false;
       this.tags = [];
       this.tagInput = '';
     }
@@ -1372,6 +1429,31 @@ export class PostEditComponent implements OnInit {
       pickedPost: picked,
     };
     this.bulbi = [...this.bulbi];
+  }
+
+  onSiblingSelected(picked: PickedPost | null) {
+    if (!picked) {
+      this.clearSibling();
+      return;
+    }
+    if (picked.id === this.postId()) {
+      this.toast.error('Un articol nu poate fi fratele lui însuși.');
+      return;
+    }
+    this.siblingPost = { id: picked.id, title: picked.title, status: 'PUBLISHED' };
+    this.pickingSibling = false;
+  }
+
+  clearSibling() {
+    this.siblingPost = null;
+    this.pickingSibling = false;
+  }
+
+  private mapSiblingFromPost(raw: unknown): { id: string; title: string; status?: string } | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const record = raw as { id?: string; title?: string; status?: string };
+    if (!record.id || !record.title) return null;
+    return { id: record.id, title: record.title, status: record.status };
   }
 
   private mapBulbiFromPost(raw: unknown): EditableBulb[] {
@@ -1735,6 +1817,7 @@ export class PostEditComponent implements OnInit {
       bulbi: this.buildBulbiPayload(),
       photoCaptions: this.buildPhotoCaptionsPayload(),
       pills: pillsPayload,
+      siblingPostId: this.siblingPost?.id ?? null,
     };
 
     this.previewOpen.set(true);
@@ -1785,6 +1868,7 @@ export class PostEditComponent implements OnInit {
       bulbi: this.buildBulbiPayload(),
       photoCaptions: this.buildPhotoCaptionsPayload(),
       pills: pillsPayload,
+      siblingPostId: this.siblingPost?.id ?? null,
     };
 
     this.saving.set(true);
@@ -1814,6 +1898,10 @@ export class PostEditComponent implements OnInit {
           this.newPillCorner = '';
           this.newPillSize = 'default';
           this.bulbi = this.mapBulbiFromPost((post as { bulbi?: unknown }).bulbi);
+          this.siblingPost = this.mapSiblingFromPost(
+            (post as { siblingPost?: unknown }).siblingPost,
+          );
+          this.pickingSibling = false;
           this.photoCaptions = this.mapPhotoCaptionsFromPost(
             (post as { photoCaptions?: unknown }).photoCaptions,
           );

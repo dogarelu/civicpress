@@ -23,6 +23,7 @@ import {
   buildSummaryDisplayCss,
   combineInlineStyles,
   hasPostSubtitle,
+  headlineHref,
 } from '@civicpress/shared';
 
 @Component({
@@ -43,15 +44,17 @@ import {
     VideoPlayerComponent,
   ],
   template: `
-    <main [class.max-w-3xl]="layoutMode() === 'longform' && !sidebar()">
+    <main [class.max-w-3xl]="layoutMode() === 'longform' && !sidebar() && !siblingArticle()">
       @if (post(); as p) {
         <div
           [class]="
             sidebar()
               ? 'grid grid-cols-1 md:grid-cols-4 md:gap-0 md:-mx-4 gap-4'
-              : layoutMode() === 'longform'
-                ? 'mx-auto'
-                : 'max-w-4xl mx-auto'
+              : siblingArticle()
+                ? ''
+                : layoutMode() === 'longform'
+                  ? 'mx-auto'
+                  : 'max-w-4xl mx-auto'
           "
         >
           <div
@@ -62,103 +65,157 @@ import {
           >
             <cp-breadcrumb [items]="breadcrumbs()" />
 
+            @if (siblingArticle(); as sibling) {
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-0">
+                <div class="min-w-0 md:pr-4 md:border-r md:border-gray-300">
+                  <ng-container *ngTemplateOutlet="articleColumn; context: { article: p }" />
+                </div>
+                <div class="min-w-0 border-t border-gray-300 pt-8 md:border-t-0 md:pt-0 md:pl-4">
+                  <ng-container *ngTemplateOutlet="articleColumn; context: { article: sibling }" />
+                </div>
+              </div>
+            } @else {
+              <ng-container *ngTemplateOutlet="articleColumn; context: { article: p }" />
+            }
+
+            @if (hasLayoutContent()) {
+              <section class="mt-8 pt-6 border-t border-border">
+                @if (articleModules().length > 0) {
+                  <cp-module-layout
+                    [modules]="articleModules()"
+                    [sidebar]="null"
+                    [showMobile]="false"
+                  />
+                }
+                <div class="md:hidden">
+                  @if (mobileModules().length > 0) {
+                    <cp-mobile-modules-layout [modules]="mobileModules()" />
+                  } @else {
+                    <cp-mobile-ordered-layout
+                      [mobileOrder]="mobileOrder()"
+                      [modules]="articleModules()"
+                      [sidebar]="sidebar()"
+                      variant="article"
+                    />
+                  }
+                </div>
+              </section>
+            }
+          </div>
+
+          <ng-template #articleColumn let-article="article">
             <article [class.article-longform]="layoutMode() === 'longform'">
               @switch (layoutMode()) {
                 @case ('media-first') {
-                  <ng-container *ngTemplateOutlet="mediaTpl; context: { rounded: true }" />
-                  <ng-container *ngTemplateOutlet="categoryTpl" />
-                  <ng-container *ngTemplateOutlet="kickerTpl" />
-                  <ng-container *ngTemplateOutlet="titleTpl" />
-                  <ng-container *ngTemplateOutlet="summaryTpl" />
-                  <ng-container *ngTemplateOutlet="metaTpl; context: { bordered: true }" />
-                  <ng-container *ngTemplateOutlet="bodyTpl" />
+                  <ng-container *ngTemplateOutlet="mediaTpl; context: { article, rounded: true }" />
+                  <ng-container *ngTemplateOutlet="categoryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="kickerTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="titleTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="metaTpl; context: { article, bordered: true }" />
+                  <ng-container *ngTemplateOutlet="bodyTpl; context: { article }" />
                 }
                 @case ('overlay-hero') {
-                  <ng-container *ngTemplateOutlet="overlayHeroTpl" />
-                  <ng-container *ngTemplateOutlet="summaryTpl" />
-                  <ng-container *ngTemplateOutlet="metaTpl; context: { bordered: true }" />
-                  <ng-container *ngTemplateOutlet="bodyTpl" />
+                  <ng-container *ngTemplateOutlet="overlayHeroTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="metaTpl; context: { article, bordered: true }" />
+                  <ng-container *ngTemplateOutlet="bodyTpl; context: { article }" />
                 }
                 @case ('split') {
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
                     <ng-container
-                      *ngTemplateOutlet="mediaTpl; context: { rounded: true, noMargin: true }"
+                      *ngTemplateOutlet="
+                        mediaTpl;
+                        context: { article, rounded: true, noMargin: true }
+                      "
                     />
                     <div>
-                      <ng-container *ngTemplateOutlet="categoryTpl" />
-                      <ng-container *ngTemplateOutlet="kickerTpl" />
-                      <ng-container *ngTemplateOutlet="titleTpl" />
-                      <ng-container *ngTemplateOutlet="summaryTpl" />
-                      <ng-container *ngTemplateOutlet="metaTpl; context: { bordered: false }" />
+                      <ng-container *ngTemplateOutlet="categoryTpl; context: { article }" />
+                      <ng-container *ngTemplateOutlet="kickerTpl; context: { article }" />
+                      <ng-container *ngTemplateOutlet="titleTpl; context: { article }" />
+                      <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
+                      <ng-container
+                        *ngTemplateOutlet="metaTpl; context: { article, bordered: false }"
+                      />
                     </div>
                   </div>
-                  <ng-container *ngTemplateOutlet="bodyTpl" />
+                  <ng-container *ngTemplateOutlet="bodyTpl; context: { article }" />
                 }
                 @case ('split-reverse') {
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
                     <div class="md:order-2">
                       <ng-container
-                        *ngTemplateOutlet="mediaTpl; context: { rounded: true, noMargin: true }"
+                        *ngTemplateOutlet="
+                          mediaTpl;
+                          context: { article, rounded: true, noMargin: true }
+                        "
                       />
                     </div>
                     <div class="md:order-1">
-                      <ng-container *ngTemplateOutlet="categoryTpl" />
-                      <ng-container *ngTemplateOutlet="kickerTpl" />
-                      <ng-container *ngTemplateOutlet="titleTpl" />
-                      <ng-container *ngTemplateOutlet="summaryTpl" />
-                      <ng-container *ngTemplateOutlet="metaTpl; context: { bordered: false }" />
+                      <ng-container *ngTemplateOutlet="categoryTpl; context: { article }" />
+                      <ng-container *ngTemplateOutlet="kickerTpl; context: { article }" />
+                      <ng-container *ngTemplateOutlet="titleTpl; context: { article }" />
+                      <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
+                      <ng-container
+                        *ngTemplateOutlet="metaTpl; context: { article, bordered: false }"
+                      />
                     </div>
                   </div>
-                  <ng-container *ngTemplateOutlet="bodyTpl" />
+                  <ng-container *ngTemplateOutlet="bodyTpl; context: { article }" />
                 }
                 @case ('compact-news') {
                   <ng-container
-                    *ngTemplateOutlet="metaTpl; context: { bordered: false, compact: true }"
+                    *ngTemplateOutlet="
+                      metaTpl;
+                      context: { article, bordered: false, compact: true }
+                    "
                   />
-                  <ng-container *ngTemplateOutlet="categoryTpl" />
-                  <ng-container *ngTemplateOutlet="kickerTpl" />
-                  <ng-container *ngTemplateOutlet="titleTpl" />
-                  @if (showMainArticleSummary()) {
-                    <ng-container *ngTemplateOutlet="summaryTpl" />
+                  <ng-container *ngTemplateOutlet="categoryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="kickerTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="titleTpl; context: { article }" />
+                  @if (showMainArticleSummary(article)) {
+                    <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
                   }
                   <ng-container
-                    *ngTemplateOutlet="mediaTpl; context: { rounded: true, compact: true }"
+                    *ngTemplateOutlet="mediaTpl; context: { article, rounded: true, compact: true }"
                   />
-                  <ng-container *ngTemplateOutlet="bodyTpl" />
+                  <ng-container *ngTemplateOutlet="bodyTpl; context: { article }" />
                 }
                 @case ('longform') {
-                  <ng-container *ngTemplateOutlet="categoryTpl" />
-                  <ng-container *ngTemplateOutlet="kickerTpl" />
+                  <ng-container *ngTemplateOutlet="categoryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="kickerTpl; context: { article }" />
                   <h1
                     class="font-heading leading-tight text-secondary mb-4"
                     [attr.style]="mainArticleTitleStyle(true)"
                   >
-                    {{ p.title }}
+                    {{ article.title }}
                   </h1>
-                  <ng-container *ngTemplateOutlet="metaTpl; context: { bordered: true }" />
-                  <ng-container *ngTemplateOutlet="mediaTpl; context: { rounded: false }" />
-                  <ng-container *ngTemplateOutlet="summaryTpl" />
+                  <ng-container *ngTemplateOutlet="metaTpl; context: { article, bordered: true }" />
+                  <ng-container
+                    *ngTemplateOutlet="mediaTpl; context: { article, rounded: false }"
+                  />
+                  <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
                   <div
                     class="article-content prose prose-lg max-w-none mx-auto"
                     [attr.style]="mainArticleBodyStyle(true)"
-                    [innerHTML]="safeContentHtml()"
+                    [innerHTML]="articleHtml(article)"
                   ></div>
                 }
                 @default {
-                  <ng-container *ngTemplateOutlet="categoryTpl" />
-                  <ng-container *ngTemplateOutlet="kickerTpl" />
-                  <ng-container *ngTemplateOutlet="titleTpl" />
-                  <ng-container *ngTemplateOutlet="summaryTpl" />
-                  <ng-container *ngTemplateOutlet="metaTpl; context: { bordered: true }" />
-                  <ng-container *ngTemplateOutlet="mediaTpl; context: { rounded: true }" />
-                  <ng-container *ngTemplateOutlet="bodyTpl" />
+                  <ng-container *ngTemplateOutlet="categoryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="kickerTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="titleTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="summaryTpl; context: { article }" />
+                  <ng-container *ngTemplateOutlet="metaTpl; context: { article, bordered: true }" />
+                  <ng-container *ngTemplateOutlet="mediaTpl; context: { article, rounded: true }" />
+                  <ng-container *ngTemplateOutlet="bodyTpl; context: { article }" />
                 }
               }
 
-              @if (p.tags?.length > 0) {
+              @if (article.tags?.length > 0) {
                 <div class="flex flex-wrap items-center gap-2 mt-6 pt-4 border-t border-border">
                   <span class="text-xs text-gray-500 shrink-0">Tag-uri:</span>
-                  @for (tag of p.tags; track tag.id) {
+                  @for (tag of article.tags; track tag.id) {
                     <span
                       class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200"
                     >
@@ -168,33 +225,9 @@ import {
                 </div>
               }
 
-              <cp-share-buttons [title]="p.title" [url]="currentUrl()" />
-
-              @if (hasLayoutContent()) {
-                <section class="mt-8 pt-6 border-t border-border">
-                  @if (articleModules().length > 0) {
-                    <cp-module-layout
-                      [modules]="articleModules()"
-                      [sidebar]="null"
-                      [showMobile]="false"
-                    />
-                  }
-                  <div class="md:hidden">
-                    @if (mobileModules().length > 0) {
-                      <cp-mobile-modules-layout [modules]="mobileModules()" />
-                    } @else {
-                      <cp-mobile-ordered-layout
-                        [mobileOrder]="mobileOrder()"
-                        [modules]="articleModules()"
-                        [sidebar]="sidebar()"
-                        variant="article"
-                      />
-                    }
-                  </div>
-                </section>
-              }
+              <cp-share-buttons [title]="article.title" [url]="articleUrl(article)" />
             </article>
-          </div>
+          </ng-template>
 
           @if (sidebar()) {
             <div class="hidden md:block md:col-span-1 md:px-4">
@@ -205,8 +238,8 @@ import {
       }
     </main>
 
-    <ng-template #categoryTpl>
-      @if (post().categories[0]; as cat) {
+    <ng-template #categoryTpl let-article="article">
+      @if (article.categories[0]; as cat) {
         <a
           [routerLink]="['/category', cat.slug]"
           class="uppercase tracking-wider mb-3 inline-block hover:opacity-80 transition-opacity"
@@ -216,28 +249,28 @@ import {
       }
     </ng-template>
 
-    <ng-template #kickerTpl>
-      @if (post().kicker) {
-        <p class="italic mb-2" [attr.style]="mainArticleKickerStyle()">{{ post().kicker }}</p>
+    <ng-template #kickerTpl let-article="article">
+      @if (article.kicker) {
+        <p class="italic mb-2" [attr.style]="mainArticleKickerStyle()">{{ article.kicker }}</p>
       }
     </ng-template>
 
-    <ng-template #titleTpl>
+    <ng-template #titleTpl let-article="article">
       <h1
         class="font-heading leading-tight text-secondary mb-4"
         [attr.style]="mainArticleTitleStyle()"
       >
-        {{ post().title }}
+        {{ article.title }}
       </h1>
     </ng-template>
 
-    <ng-template #summaryTpl>
-      @if (showMainArticleSummary()) {
+    <ng-template #summaryTpl let-article="article">
+      @if (showMainArticleSummary(article)) {
         <div class="mb-5" [attr.style]="mainArticleSummaryStyle()">
           <cp-post-subtitle
             [show]="true"
-            [bulbi]="post().bulbi ?? []"
-            [excerpt]="post().excerpt"
+            [bulbi]="article.bulbi ?? []"
+            [excerpt]="article.excerpt"
             listClass="text-gray-700 leading-snug"
             textClass="text-gray-700 leading-relaxed"
           />
@@ -245,8 +278,10 @@ import {
       }
     </ng-template>
 
-    <ng-template #metaTpl let-bordered="bordered" let-compact="compact">
-      @if (showAuthor() || showDate() || showViews() || showReadingTime()) {
+    <ng-template #metaTpl let-article="article" let-bordered="bordered" let-compact="compact">
+      @if (
+        showAuthor(article) || showDate(article) || showViews(article) || showReadingTime(article)
+      ) {
         <div
           class="flex flex-wrap items-center gap-3 mb-6"
           [class.text-sm]="!compact"
@@ -256,76 +291,87 @@ import {
           [class.pb-4]="!!bordered"
           [class.mb-3]="!!compact"
         >
-          @if (showAuthor()) {
-            <span [attr.style]="mainArticleAuthorStyle()">{{ displayAuthor() }}</span>
+          @if (showAuthor(article)) {
+            <span [attr.style]="mainArticleAuthorStyle()">{{ displayAuthor(article) }}</span>
           }
-          @if (showAuthor() && (showDate() || showReadingTime() || showViews())) {
+          @if (
+            showAuthor(article) &&
+            (showDate(article) || showReadingTime(article) || showViews(article))
+          ) {
             <span class="text-gray-400">·</span>
           }
-          @if (showDate()) {
-            <time [dateTime]="post().publishedAt!" [attr.style]="mainArticleDateStyle()">{{
-              formatDate(post().publishedAt!)
+          @if (showDate(article)) {
+            <time [dateTime]="article.publishedAt!" [attr.style]="mainArticleDateStyle()">{{
+              formatDate(article.publishedAt!)
             }}</time>
           }
-          @if (showDate() && showReadingTime()) {
+          @if (showDate(article) && showReadingTime(article)) {
             <span class="text-gray-400">·</span>
           }
-          @if (showReadingTime()) {
-            <cp-post-reading-time [seconds]="post().readingTimeSeconds!" />
+          @if (showReadingTime(article)) {
+            <cp-post-reading-time [seconds]="article.readingTimeSeconds!" />
           }
-          @if ((showDate() || showReadingTime()) && showViews()) {
+          @if ((showDate(article) || showReadingTime(article)) && showViews(article)) {
             <span class="text-gray-400">·</span>
           }
-          @if (showViews()) {
+          @if (showViews(article)) {
             <span [attr.style]="mainArticleViewsStyle()">
-              <cp-post-view-count [count]="post().viewCount!" />
+              <cp-post-view-count [count]="article.viewCount!" />
             </span>
           }
         </div>
       }
     </ng-template>
 
-    <ng-template #mediaTpl let-rounded="rounded" let-noMargin="noMargin" let-compact="compact">
-      @if (post().videoUrl) {
+    <ng-template
+      #mediaTpl
+      let-article="article"
+      let-rounded="rounded"
+      let-noMargin="noMargin"
+      let-compact="compact"
+    >
+      @if (article.videoUrl) {
         <div [class.mb-6]="!noMargin" [class.mb-4]="!!compact">
           <div class="aspect-video">
             <cp-video-player
-              [videoUrl]="post().videoUrl!"
-              [title]="post().title"
-              [posterUrl]="post().heroImage?.url ?? null"
+              [videoUrl]="article.videoUrl!"
+              [title]="article.title"
+              [posterUrl]="article.heroImage?.url ?? null"
               [autoplayOnStart]="false"
             />
           </div>
-          <ng-container *ngTemplateOutlet="heroCaptionTpl" />
+          <ng-container *ngTemplateOutlet="heroCaptionTpl; context: { article }" />
         </div>
-      } @else if (post().heroImage) {
+      } @else if (article.heroImage) {
         <figure class="relative" [class.mb-6]="!noMargin" [class.mb-4]="!!compact">
           <img
-            [src]="post().heroImage!.url"
-            [alt]="post().heroImage!.alt ?? post().title"
+            [src]="article.heroImage!.url"
+            [alt]="article.heroImage!.alt ?? article.title"
             class="w-full object-cover"
             [class.rounded]="!!rounded"
             [class.max-h-72]="!!compact"
             loading="eager"
           />
-          <ng-container *ngTemplateOutlet="heroCaptionTpl; context: { asFigcaption: true }" />
+          <ng-container
+            *ngTemplateOutlet="heroCaptionTpl; context: { article, asFigcaption: true }"
+          />
         </figure>
       }
     </ng-template>
 
-    <ng-template #overlayHeroTpl>
+    <ng-template #overlayHeroTpl let-article="article">
       <div class="relative mb-6 -mx-4 sm:mx-0 overflow-hidden bg-muted aspect-[16/9] sm:rounded">
-        @if (post().videoUrl) {
+        @if (article.videoUrl) {
           <cp-video-player
-            [videoUrl]="post().videoUrl!"
-            [title]="post().title"
-            [posterUrl]="post().heroImage?.url ?? null"
+            [videoUrl]="article.videoUrl!"
+            [title]="article.title"
+            [posterUrl]="article.heroImage?.url ?? null"
             [autoplayOnStart]="false"
           />
-        } @else if (post().heroImage) {
+        } @else if (article.heroImage) {
           <img
-            [src]="post().heroImage!.url"
-            [alt]="post().heroImage!.alt ?? post().title"
+            [src]="article.heroImage!.url"
+            [alt]="article.heroImage!.alt ?? article.title"
             class="absolute inset-0 w-full h-full object-cover"
             loading="eager"
           />
@@ -336,7 +382,7 @@ import {
           class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent"
         ></div>
         <div class="absolute inset-x-0 bottom-0 p-4 sm:p-6 text-white">
-          @if (post().categories[0]; as cat) {
+          @if (article.categories[0]; as cat) {
             <a
               [routerLink]="['/category', cat.slug]"
               class="uppercase tracking-wider mb-2 inline-block text-white/90 hover:text-white"
@@ -344,28 +390,28 @@ import {
               >{{ cat.name }}</a
             >
           }
-          @if (post().kicker) {
+          @if (article.kicker) {
             <p class="italic mb-2 text-white/90" [attr.style]="mainArticleKickerStyle('#ffffff')">
-              {{ post().kicker }}
+              {{ article.kicker }}
             </p>
           }
           <h1
             class="font-heading leading-tight text-white"
             [attr.style]="mainArticleTitleStyle(false, '#ffffff')"
           >
-            {{ post().title }}
+            {{ article.title }}
           </h1>
         </div>
       </div>
-      @if (heroCaption()) {
+      @if (heroCaption(article)) {
         <div class="mb-6">
-          <ng-container *ngTemplateOutlet="heroCaptionTpl" />
+          <ng-container *ngTemplateOutlet="heroCaptionTpl; context: { article }" />
         </div>
       }
     </ng-template>
 
-    <ng-template #heroCaptionTpl let-asFigcaption="asFigcaption">
-      @if (heroCaption(); as caption) {
+    <ng-template #heroCaptionTpl let-article="article" let-asFigcaption="asFigcaption">
+      @if (heroCaption(article); as caption) {
         @if (asFigcaption) {
           <figcaption
             class="cp-article-photo-caption"
@@ -381,11 +427,11 @@ import {
       }
     </ng-template>
 
-    <ng-template #bodyTpl>
+    <ng-template #bodyTpl let-article="article">
       <div
         class="article-content prose prose-sm max-w-none"
         [attr.style]="mainArticleBodyStyle()"
-        [innerHTML]="safeContentHtml()"
+        [innerHTML]="articleHtml(article)"
       ></div>
     </ng-template>
   `,
@@ -394,15 +440,10 @@ export class ArticlePageViewComponent {
   private siteSettings = inject(SiteSettingsService);
   private sanitizer = inject(DomSanitizer);
   post = input.required<PostDetail>();
-  safeContentHtml = computed(() =>
-    this.sanitizer.bypassSecurityTrustHtml(this.post().contentHtml ?? ''),
-  );
-  heroCaption = computed(() => {
-    const post = this.post();
-    const fromHero = post.heroImage?.caption?.trim();
-    if (fromHero) return fromHero;
-    const fromLabels = post.photoCaptions?.[0]?.label?.trim();
-    return fromLabels || null;
+  siblingArticle = computed(() => {
+    const sibling = this.post().sibling;
+    if (!sibling || sibling.id === this.post().id) return null;
+    return sibling;
   });
   articleModules = computed(() => this.post().modules ?? []);
   sidebar = computed(() => this.post().sidebar ?? null);
@@ -432,8 +473,22 @@ export class ArticlePageViewComponent {
     ];
   });
 
-  currentUrl() {
-    return typeof window !== 'undefined' ? window.location.href : '';
+  articleUrl(article: PostDetail): string {
+    const path = headlineHref(article);
+    if (typeof window === 'undefined') return path;
+    if (article.id === this.post().id) return window.location.href;
+    return `${window.location.origin}${path}`;
+  }
+
+  articleHtml(article: PostDetail) {
+    return this.sanitizer.bypassSecurityTrustHtml(article.contentHtml ?? '');
+  }
+
+  heroCaption(article: PostDetail): string | null {
+    const fromHero = article.heroImage?.caption?.trim();
+    if (fromHero) return fromHero;
+    const fromLabels = article.photoCaptions?.[0]?.label?.trim();
+    return fromLabels || null;
   }
 
   mainArticleCategoryStyle(fallbackColor = '#4b5563'): string {
@@ -509,41 +564,38 @@ export class ArticlePageViewComponent {
     );
   }
 
-  displayAuthor(): string | null {
-    const p = this.post();
-    return p.authorName?.trim() || p.author?.displayName || null;
+  displayAuthor(article: PostDetail): string | null {
+    return article.authorName?.trim() || article.author?.displayName || null;
   }
 
-  showDate(): boolean {
-    const p = this.post();
-    return p.showDate !== false && !!p.publishedAt;
+  showDate(article: PostDetail): boolean {
+    return article.showDate !== false && !!article.publishedAt;
   }
 
-  showAuthor(): boolean {
-    return this.post().showAuthor !== false && !!this.displayAuthor();
+  showAuthor(article: PostDetail): boolean {
+    return article.showAuthor !== false && !!this.displayAuthor(article);
   }
 
-  showViews(): boolean {
-    return this.siteSettings.canShowViews(this.post());
+  showViews(article: PostDetail): boolean {
+    return this.siteSettings.canShowViews(article);
   }
 
-  showReadingTime(): boolean {
-    const p = this.post();
-    return p.articleMainShowReadingTime === true && (p.readingTimeSeconds ?? 0) > 0;
+  showReadingTime(article: PostDetail): boolean {
+    return this.post().articleMainShowReadingTime === true && (article.readingTimeSeconds ?? 0) > 0;
   }
 
   formatDate(dateStr: string): string {
     return this.siteSettings.formatPostDate(dateStr);
   }
 
-  showMainArticleSummary(): boolean {
-    const post = this.post();
-    if (!hasPostSubtitle(post)) return false;
-    if (post.bulbi && post.bulbi.length > 0) return true;
+  showMainArticleSummary(article: PostDetail): boolean {
+    if (!hasPostSubtitle(article)) return false;
+    if (article.bulbi && article.bulbi.length > 0) return true;
+    const layout = this.post();
     if (this.layoutMode() === 'compact-news') {
-      return post.articleMainShowSummary === true;
+      return layout.articleMainShowSummary === true;
     }
-    return post.articleMainShowSummary !== false;
+    return layout.articleMainShowSummary !== false;
   }
 
   private composeStyle(

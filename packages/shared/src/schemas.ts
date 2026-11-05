@@ -2084,8 +2084,16 @@ export const PostDetailSchema = z.object({
   sidebar: ResolvedSidebarSchema.nullable().optional(),
   mobileOrder: z.array(MobileLayoutUnitSchema).optional().default([]),
   mobileModules: z.array(ResolvedMobileModuleSchema).optional().default([]),
+  /**
+   * Sibling article rendered beside this one. Set only on the principal.
+   * The sibling payload does not include its own sibling, modules, or sidebar.
+   */
+  sibling: z.unknown().nullable().optional(),
 });
-export type PostDetail = z.infer<typeof PostDetailSchema>;
+type PostDetailInferred = z.infer<typeof PostDetailSchema>;
+export type PostDetail = Omit<PostDetailInferred, 'sibling'> & {
+  sibling?: PostDetail | null;
+};
 
 // ─── Admin category schemas ───────────────────────────────────────────────────
 
@@ -2537,6 +2545,8 @@ export const PostCreateSchema = z
     bulbi: z.array(PostBulbRefSchema).optional().default([]),
     /** Photo captions (hero first when visible, then body images). */
     photoCaptions: z.array(PostPhotoCaptionRefSchema).optional().default([]),
+    /** Other article shown beside this one. Null clears the link. */
+    siblingPostId: z.string().min(1).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.pills) refinePostPills(data.pills, ctx);
@@ -2574,6 +2584,8 @@ export const PostUpdateSchema = z
     pills: z.array(PostPillRefSchema).max(MAX_POST_PILLS).optional(),
     bulbi: z.array(PostBulbRefSchema).optional(),
     photoCaptions: z.array(PostPhotoCaptionRefSchema).optional(),
+    /** Other article shown beside this one. Null clears the link. */
+    siblingPostId: z.string().min(1).nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.pills) refinePostPills(data.pills, ctx);
@@ -2610,6 +2622,8 @@ export const PostPreviewRequestSchema = z.object({
   pills: z.array(PostPillRefSchema).max(MAX_POST_PILLS).optional(),
   bulbi: z.array(PostBulbRefSchema).optional().default([]),
   photoCaptions: z.array(PostPhotoCaptionRefSchema).optional().default([]),
+  /** Other article shown beside this one in preview. */
+  siblingPostId: z.string().min(1).nullable().optional(),
 });
 export type PostPreviewRequest = z.infer<typeof PostPreviewRequestSchema>;
 

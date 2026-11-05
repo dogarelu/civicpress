@@ -20,6 +20,7 @@ import {
 import { PostStatus, Role } from '@prisma/client';
 import {
   applyArticleReferences,
+  DEFAULT_ARTICLE_LAYOUT_MODE,
   headlineHref,
   isYoutubeUrl,
   listArticleReferenceIds,
@@ -164,6 +165,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     const mapped = mapPostDetail(post);
     const photoCaptions = mapPostPhotoCaptions(post.photoCaptions);
     const withPhotos = applyPublicArticlePhotos(mapped, photoCaptions);
+    const sibling = await this.loadSiblingDetail(post.siblingPostId, { publishedOnly: true });
     return {
       ...withPhotos,
       contentHtml: await this.resolveArticleReferences(withPhotos.contentHtml),
@@ -171,6 +173,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       photoCaptions,
       relatedPosts: relatedPosts.map((related) => mapPostSummary(related)),
       latestPosts: latestPosts.map((latest) => mapPostSummary(latest)),
+      sibling,
     };
   }
 
@@ -380,6 +383,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     if (!post || post.deletedAt) throw new NotFoundException();
     if (actor.role === Role.AUTHOR && post.authorId !== actor.sub) throw new ForbiddenException();
     const mapped = mapPostDetail(post);
+    const siblingPost = await this.loadSiblingSummary(post.siblingPostId);
     return {
       ...mapped,
       kicker: post.kicker,
@@ -391,6 +395,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       scheduledFor: post.scheduledFor?.toISOString() ?? null,
       relatedPosts: [],
       latestPosts: [],
+      siblingPost,
     };
   }
 
@@ -476,6 +481,11 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     const authorName = data.authorName?.trim() || author?.displayName || null;
     const hasSubtitleBulbi = bulbi.length > 0;
 
+    const sibling =
+      data.siblingPostId && data.siblingPostId !== data.id
+        ? await this.loadSiblingDetail(data.siblingPostId, { publishedOnly: true })
+        : null;
+
     const detailed = applyPublicArticlePhotos(
       {
         id: data.id || 'preview',
@@ -526,13 +536,101 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         sidebar: layout.sidebar,
         mobileOrder: layout.mobileOrder,
         mobileModules: layout.mobileModules,
+        sibling,
       },
       photoCaptions,
     );
     return {
       ...detailed,
       contentHtml: await this.resolveArticleReferences(detailed.contentHtml),
+      sibling,
     };
+  }
+
+  /**
+   * Article body for the principal's second column.
+   * Unpublished or trashed siblings are omitted. The sibling's own sibling is not loaded.
+   */
+  private async loadSiblingDetail(
+    siblingPostId: string | null | undefined,
+    opts: { publishedOnly: boolean },
+  ): Promise<PostDetail | null> {
+    if (!siblingPostId) return null;
+    const sibling = await this.prisma.post.findFirst({
+      where: {
+        id: siblingPostId,
+        deletedAt: null,
+        ...(opts.publishedOnly ? { status: PostStatus.PUBLISHED } : {}),
+      },
+      include: POST_INCLUDE,
+    });
+    if (!sibling) return null;
+
+    const mapped = mapPostDetail(sibling);
+    const photoCaptions = mapPostPhotoCaptions(sibling.photoCaptions);
+    const withPhotos = applyPublicArticlePhotos(mapped, photoCaptions);
+    return {
+      ...withPhotos,
+      contentHtml: await this.resolveArticleReferences(withPhotos.contentHtml),
+      bulbi: mapPostBulbi(sibling.bulbi, { publishedOnly: opts.publishedOnly }),
+      photoCaptions,
+      relatedPosts: [],
+      latestPosts: [],
+      modules: [],
+      sidebar: null,
+      mobileOrder: [],
+      mobileModules: [],
+      articleLayoutMode: DEFAULT_ARTICLE_LAYOUT_MODE,
+      articleMainShowSummary: true,
+      articleMainShowReadingTime: false,
+      sibling: null,
+    };
+  }
+
+  private async loadSiblingSummary(siblingPostId: string | null | undefined) {
+    if (!siblingPostId) return null;
+    const sibling = await this.prisma.post.findUnique({
+      where: { id: siblingPostId },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        status: true,
+        deletedAt: true,
+        publishedAt: true,
+        authorName: true,
+        author: { select: { displayName: true } },
+      },
+    });
+    if (!sibling || sibling.deletedAt) return null;
+    return {
+      id: sibling.id,
+      title: sibling.title,
+      slug: sibling.slug,
+      status: sibling.status,
+      publishedAt: sibling.publishedAt?.toISOString() ?? null,
+      authorName: sibling.authorName?.trim() || sibling.author?.displayName || null,
+    };
+  }
+
+  private async assertSiblingPostId(
+    siblingPostId: string | null | undefined,
+    selfId?: string,
+  ): Promise<string | null | undefined> {
+    if (siblingPostId === undefined) return undefined;
+    const id = siblingPostId?.trim() || null;
+    if (!id) return null;
+    if (selfId && id === selfId) {
+      throw new BadRequestException('Un articol nu poate fi fratele lui însuși.');
+    }
+    const sibling = await this.prisma.post.findUnique({
+      where: { id },
+      select: { id: true, deletedAt: true },
+    });
+    if (!sibling || sibling.deletedAt) {
+      throw new BadRequestException('Articolul frate nu există.');
+    }
+    return sibling.id;
   }
 
   /** Published title, link, and hero image for in-body “Vezi și” blocks. */
@@ -667,9 +765,11 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       }>;
       bulbi?: Array<{ label: string; postId?: string | null }>;
       photoCaptions?: Array<{ label: string }>;
+      siblingPostId?: string | null;
     },
     actor: Actor,
   ) {
+    const siblingPostId = await this.assertSiblingPostId(data.siblingPostId);
     const baseSlug = data.slug || slugify(data.title);
     const slug = await this.findUniqueSlug(baseSlug);
 
@@ -701,6 +801,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         status: PostStatus.DRAFT,
         seoTitle: data.seoTitle ?? null,
         seoDescription: data.seoDescription ?? null,
+        ...(siblingPostId ? { siblingPostId } : {}),
       },
     });
 
@@ -821,6 +922,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       }>;
       bulbi?: Array<{ label: string; postId?: string | null }>;
       photoCaptions?: Array<{ label: string }>;
+      siblingPostId?: string | null;
     },
     actor: Actor,
   ) {
@@ -842,6 +944,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
+    const siblingPostId = await this.assertSiblingPostId(data.siblingPostId, id);
     const publishedAt = toDateOrNull(data.publishedAt);
     const subtitleShowSummaryFallback =
       data.bulbi !== undefined
@@ -882,6 +985,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
           : subtitleShowSummaryFallback !== undefined
             ? { showSummary: subtitleShowSummaryFallback }
             : {}),
+        ...(siblingPostId !== undefined ? { siblingPostId } : {}),
       },
     });
 
