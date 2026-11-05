@@ -295,11 +295,12 @@ model PostPill {
   @@index([pillId])
 }
 
-/// Subtitle bullet ("bumb"): optional link to another article.
+/// Subtitle bullet ("bumb"): optional link to another article or an external URL.
 model PostBulb {
   id           String  @id @default(cuid())
   postId       String
   linkedPostId String?
+  externalUrl  String?
   sortOrder    Int
   label        String
 

@@ -25,6 +25,7 @@ import {
   canManageSiteStructure,
   isYoutubeUrl,
   listArticleBodyMedia,
+  safeHttpUrl,
   toYoutubeEmbedUrl,
 } from '@civicpress/shared';
 
@@ -63,6 +64,7 @@ interface EditableBulb {
   postId: string;
   title: string;
   pickedPost: PickedPost | null;
+  externalUrl: string;
 }
 
 interface EditablePhotoCaption {
@@ -320,8 +322,8 @@ function buildPlacementOptions(
                 <div>
                   <h3 class="text-sm font-semibold text-gray-700">Subtitlu (bumbi)</h3>
                   <p class="text-xs text-gray-400 mt-0.5">
-                    Înlocuiește rezumatul: listă de puncte sub titlu și în module. Linkul către un
-                    alt articol este opțional.
+                    Înlocuiește rezumatul: listă de puncte sub titlu și în module. Poți lega un
+                    articol publicat sau o adresă externă.
                   </p>
                 </div>
                 <button
@@ -387,6 +389,23 @@ function buildPlacementOptions(
                     [value]="bulb.pickedPost"
                     (selected)="onBulbSelected(i, $event)"
                   />
+
+                  <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1"
+                      >Link extern (opțional)</label
+                    >
+                    <input
+                      type="url"
+                      [ngModel]="bulb.externalUrl"
+                      (ngModelChange)="onBulbExternalUrl(i, $event)"
+                      [name]="'bulbExternalUrl' + i"
+                      placeholder="https://exemplu.ro/pagina"
+                      class="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                    <p class="text-xs text-gray-400 mt-1">
+                      Adresă http sau https. Se deschide într-o filă nouă.
+                    </p>
+                  </div>
                 </div>
               }
             </div>
@@ -1384,7 +1403,10 @@ export class PostEditComponent implements OnInit {
   }
 
   addBulb() {
-    this.bulbi = [...this.bulbi, { label: '', postId: '', title: '', pickedPost: null }];
+    this.bulbi = [
+      ...this.bulbi,
+      { label: '', postId: '', title: '', pickedPost: null, externalUrl: '' },
+    ];
   }
 
   removeBulb(index: number) {
@@ -1397,6 +1419,17 @@ export class PostEditComponent implements OnInit {
     const next = [...this.bulbi];
     [next[index], next[target]] = [next[target], next[index]];
     this.bulbi = next;
+  }
+
+  onBulbExternalUrl(index: number, value: string) {
+    const bulb = this.bulbi[index];
+    if (!bulb) return;
+    bulb.externalUrl = value ?? '';
+    if (bulb.externalUrl.trim()) {
+      bulb.postId = '';
+      bulb.title = '';
+      bulb.pickedPost = null;
+    }
   }
 
   onBulbSelected(index: number, picked: PickedPost | null) {
@@ -1427,6 +1460,7 @@ export class PostEditComponent implements OnInit {
       postId: picked.id,
       title: picked.title,
       pickedPost: picked,
+      externalUrl: '',
     };
     this.bulbi = [...this.bulbi];
   }
@@ -1469,6 +1503,7 @@ export class PostEditComponent implements OnInit {
           title?: string;
           slug?: string;
         } | null;
+        externalUrl?: string | null;
         post?: {
           id?: string;
           title?: string;
@@ -1478,14 +1513,16 @@ export class PostEditComponent implements OnInit {
         };
       };
       const linked = record.linkedPost ?? record.post ?? null;
-      const postId = linked?.id ?? record.postId ?? '';
+      const externalUrl = safeHttpUrl(record.externalUrl) ?? '';
+      const postId = externalUrl ? '' : (linked?.id ?? record.postId ?? '');
       const title = linked?.title ?? '';
       const label = record.label?.trim() || record.labelOverride?.trim() || title || '';
       if (!label) continue;
       items.push({
         label,
         postId,
-        title,
+        title: postId ? title : '',
+        externalUrl,
         pickedPost: postId
           ? {
               id: postId,
@@ -1503,10 +1540,18 @@ export class PostEditComponent implements OnInit {
   private buildBulbiPayload() {
     return this.bulbi
       .filter((item) => item.label.trim())
-      .map((item) => ({
-        label: item.label.trim(),
-        postId: item.postId || null,
-      }));
+      .map((item) => {
+        const externalUrl = item.externalUrl.trim();
+        if (externalUrl && !safeHttpUrl(externalUrl)) {
+          this.toast.error('Linkul extern trebuie să fie o adresă http:// sau https://');
+          throw new Error('invalid bumb external url');
+        }
+        return {
+          label: item.label.trim(),
+          postId: externalUrl ? null : item.postId || null,
+          externalUrl: externalUrl || null,
+        };
+      });
   }
 
   addPhotoCaption() {
@@ -1789,8 +1834,10 @@ export class PostEditComponent implements OnInit {
 
   openPreview() {
     let pillsPayload: ReturnType<PostEditComponent['buildPillsPayload']>;
+    let bulbiPayload: ReturnType<PostEditComponent['buildBulbiPayload']>;
     try {
       pillsPayload = this.buildPillsPayload();
+      bulbiPayload = this.buildBulbiPayload();
     } catch {
       return;
     }
@@ -1814,7 +1861,7 @@ export class PostEditComponent implements OnInit {
       categoryIds: this.primaryCategoryId ? [this.primaryCategoryId] : [],
       primaryCategoryId: this.primaryCategoryId || null,
       tagNames: this.buildTagNamesPayload(),
-      bulbi: this.buildBulbiPayload(),
+      bulbi: bulbiPayload,
       photoCaptions: this.buildPhotoCaptionsPayload(),
       pills: pillsPayload,
       siblingPostId: this.siblingPost?.id ?? null,
@@ -1843,8 +1890,10 @@ export class PostEditComponent implements OnInit {
 
   save(options: { transitionAfterSave?: 'submit' } = {}) {
     let pillsPayload: ReturnType<PostEditComponent['buildPillsPayload']>;
+    let bulbiPayload: ReturnType<PostEditComponent['buildBulbiPayload']>;
     try {
       pillsPayload = this.buildPillsPayload();
+      bulbiPayload = this.buildBulbiPayload();
     } catch {
       return;
     }
@@ -1865,7 +1914,7 @@ export class PostEditComponent implements OnInit {
       categoryIds: this.primaryCategoryId ? [this.primaryCategoryId] : [],
       primaryCategoryId: this.primaryCategoryId || null,
       tagNames: this.buildTagNamesPayload(),
-      bulbi: this.buildBulbiPayload(),
+      bulbi: bulbiPayload,
       photoCaptions: this.buildPhotoCaptionsPayload(),
       pills: pillsPayload,
       siblingPostId: this.siblingPost?.id ?? null,

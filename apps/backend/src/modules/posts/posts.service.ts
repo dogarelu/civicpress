@@ -25,6 +25,7 @@ import {
   isYoutubeUrl,
   listArticleReferenceIds,
   readingTimeSecondsFromHtml,
+  safeHttpUrl,
   toYoutubeEmbedUrl,
 } from '@civicpress/shared';
 import type { PostDetail, PostPreviewRequest } from '@civicpress/shared';
@@ -700,10 +701,14 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     bulbi: NonNullable<PostPreviewRequest['bulbi']>,
   ): Promise<PostDetail['bulbi']> {
     const items = bulbi
-      .map((item) => ({
-        label: item.label?.trim() ?? '',
-        postId: item.postId?.trim() || null,
-      }))
+      .map((item) => {
+        const link = readBumbLink(item);
+        return {
+          label: item.label?.trim() ?? '',
+          postId: link.postId,
+          externalUrl: link.externalUrl,
+        };
+      })
       .filter((item) => item.label);
 
     const linkedIds = [
@@ -721,6 +726,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       id: `preview-bumb-${index}`,
       label: item.label,
       linkedPost: item.postId ? (linkedById.get(item.postId) ?? null) : null,
+      externalUrl: item.postId ? null : item.externalUrl,
     }));
   }
 
@@ -763,7 +769,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         corner?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | null;
         size?: 'smaller' | 'default' | 'bigger';
       }>;
-      bulbi?: Array<{ label: string; postId?: string | null }>;
+      bulbi?: Array<{ label: string; postId?: string | null; externalUrl?: string | null }>;
       photoCaptions?: Array<{ label: string }>;
       siblingPostId?: string | null;
     },
@@ -920,7 +926,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         corner?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | null;
         size?: 'smaller' | 'default' | 'bigger';
       }>;
-      bulbi?: Array<{ label: string; postId?: string | null }>;
+      bulbi?: Array<{ label: string; postId?: string | null; externalUrl?: string | null }>;
       photoCaptions?: Array<{ label: string }>;
       siblingPostId?: string | null;
     },
@@ -1303,16 +1309,22 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
 
   private async syncBulbi(
     postId: string,
-    bulbi: Array<{ label: string; postId?: string | null }>,
+    bulbi: Array<{ label: string; postId?: string | null; externalUrl?: string | null }>,
     selfPostId: string | null,
   ) {
     const seenLinks = new Set<string>();
-    const normalized: Array<{ label: string; linkedPostId: string | null }> = [];
+    const normalized: Array<{
+      label: string;
+      linkedPostId: string | null;
+      externalUrl: string | null;
+    }> = [];
 
     for (const item of bulbi) {
       const label = item.label?.trim();
       if (!label) continue;
-      const linkedPostId = item.postId?.trim() || null;
+      const link = readBumbLink(item);
+      const externalUrl = link.externalUrl;
+      const linkedPostId = link.postId;
       if (linkedPostId) {
         if (selfPostId && linkedPostId === selfPostId) {
           throw new BadRequestException('Bumbi cannot link an article to itself');
@@ -1322,7 +1334,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         }
         seenLinks.add(linkedPostId);
       }
-      normalized.push({ label, linkedPostId });
+      normalized.push({ label, linkedPostId, externalUrl });
     }
 
     const linkedIds = normalized
@@ -1347,6 +1359,7 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         data: {
           postId,
           linkedPostId: item.linkedPostId,
+          externalUrl: item.externalUrl,
           sortOrder: index,
           label: item.label,
         },
@@ -1465,4 +1478,28 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       },
     });
   }
+}
+
+function readBumbLink(item: { postId?: string | null; externalUrl?: string | null }): {
+  postId: string | null;
+  externalUrl: string | null;
+} {
+  const rawUrl = item.externalUrl?.trim() || null;
+  const postId = item.postId?.trim() || null;
+  if (rawUrl && postId) {
+    throw new BadRequestException('Un bumb poate avea fie un articol, fie un link extern');
+  }
+  return { postId, externalUrl: readBumbExternalUrl(rawUrl) };
+}
+
+function readBumbExternalUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return null;
+  const safe = safeHttpUrl(trimmed);
+  if (!safe) {
+    throw new BadRequestException(
+      'Linkul extern al bumbului trebuie să fie o adresă http sau https',
+    );
+  }
+  return safe;
 }

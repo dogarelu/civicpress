@@ -14,6 +14,7 @@ import type {
 import {
   applyArticlePhotoCaptions,
   readingTimeSecondsFromHtml,
+  safeHttpUrl,
   splitArticlePhotoCaptions,
 } from '@civicpress/shared';
 
@@ -147,6 +148,7 @@ export function mapPostBulbi(
   return bulbi
     .map((item) => {
       const linked = item.linkedPost;
+      const externalUrl = linked ? null : safeHttpUrl(item.externalUrl);
       if (
         linked &&
         opts?.publishedOnly &&
@@ -156,12 +158,14 @@ export function mapPostBulbi(
           id: item.id,
           label: item.label,
           linkedPost: null as null,
+          externalUrl: safeHttpUrl(item.externalUrl),
         };
       }
       return {
         id: item.id,
         label: item.label,
         linkedPost: linked ? { id: linked.id, slug: linked.slug, title: linked.title } : null,
+        externalUrl,
       };
     })
     .filter((item) => !!item.label?.trim());

@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import type { PostBumb } from '@civicpress/shared';
-import { cleanExcerptText } from '@civicpress/shared';
+import { cleanExcerptText, safeHttpUrl } from '@civicpress/shared';
 
 export type PostSubtitleVariant = 'default' | 'hero';
 
@@ -23,6 +23,16 @@ export type PostSubtitleVariant = 'default' | 'hero';
               @if (item.linkedPost; as linked) {
                 <a
                   [routerLink]="['/', linked.slug]"
+                  class="underline underline-offset-2 hover:opacity-80 transition-opacity"
+                  (click)="$event.stopPropagation()"
+                >
+                  {{ item.label }}
+                </a>
+              } @else if (externalHref(item); as href) {
+                <a
+                  [href]="href"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   class="underline underline-offset-2 hover:opacity-80 transition-opacity"
                   (click)="$event.stopPropagation()"
                 >
@@ -69,6 +79,10 @@ export class PostSubtitleComponent {
 
   get cleanExcerpt(): string {
     return cleanExcerptText(this.excerpt);
+  }
+
+  externalHref(item: PostBumb): string | null {
+    return safeHttpUrl(item.externalUrl);
   }
 
   /** Keep base list classes when callers pass extra `[class]` extras. */

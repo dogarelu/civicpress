@@ -169,11 +169,13 @@ export const PostBumbLinkedPostSchema = z.object({
 });
 export type PostBumbLinkedPost = z.infer<typeof PostBumbLinkedPostSchema>;
 
-/** Subtitle bullet ("bumb") — text with optional link to another article. */
+/** Subtitle bullet ("bumb") — text with an optional article link or external URL. */
 export const PostBumbSchema = z.object({
   id: z.string(),
   label: z.string(),
   linkedPost: PostBumbLinkedPostSchema.nullable().optional(),
+  /** http(s) URL. Present only when the bumb is not linked to an article. */
+  externalUrl: z.string().nullable().optional(),
 });
 export type PostBumb = z.infer<typeof PostBumbSchema>;
 
@@ -218,11 +220,45 @@ export const PostSummarySchema = z.object({
 });
 export type PostSummary = z.infer<typeof PostSummarySchema>;
 
-/** Write DTO for a subtitle bumb. `postId` = optional linked article. */
-export const PostBulbRefSchema = z.object({
-  label: z.string().min(1).max(500),
-  postId: z.string().optional().nullable(),
-});
+/** Trimmed http(s) URL, or null when the value is empty or not a safe web address. */
+export function safeHttpUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed || trimmed.length > 2000) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.username || url.password) return null;
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+/** Write DTO for a subtitle bumb. `postId` = optional linked article; `externalUrl` = optional http(s) link. */
+export const PostBulbRefSchema = z
+  .object({
+    label: z.string().min(1).max(500),
+    postId: z.string().optional().nullable(),
+    externalUrl: z.string().max(2000).optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    const postId = data.postId?.trim() || null;
+    const rawUrl = data.externalUrl?.trim() || null;
+    if (postId && rawUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Un bumb poate avea fie un articol, fie un link extern',
+        path: ['externalUrl'],
+      });
+    }
+    if (rawUrl && !safeHttpUrl(rawUrl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Linkul extern trebuie să fie o adresă http sau https',
+        path: ['externalUrl'],
+      });
+    }
+  });
 export type PostBulbRef = z.infer<typeof PostBulbRefSchema>;
 
 /** Caption under one article photo (hero first when visible, then body images). */

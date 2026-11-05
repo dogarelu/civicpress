@@ -153,7 +153,7 @@ Ecranul este împărțit în două: **formularul principal** (stânga) și **pan
 | **Autor (text afișat)**                    | Numele autorului afișat public; poate fi ales dintr-un pseudonim sau scris liber. |
 | **Casete de afișare**                      | Afișează autorul / data / rezumatul în module și listări.                         |
 | **Rezumat**                                | Un scurt sumar al articolului.                                                    |
-| **Bulbi**                                  | Articole legate manual, afișate ca linkuri sub imaginea principală.               |
+| **Subtitlu (bumbi)**                       | Puncte sub titlu. Fiecare poate lega un articol publicat sau o adresă externă.    |
 | **Conținut**                               | Corpul articolului — editor vizual sau mod HTML.                                  |
 | **SEO**                                    | Titlu SEO și Descriere SEO pentru motoarele de căutare.                           |
 
@@ -165,11 +165,12 @@ Ecranul este împărțit în două: **formularul principal** (stânga) și **pan
 - La inserarea unei **imagini**, aceasta este încărcată automat în biblioteca media și inserată în text.
 - Butonul **↑ Import Word (.docx)** permite importul de conținut dintr-un document Word.
 
-#### Secțiunea Bulbi (articole legate)
+#### Secțiunea Subtitlu (bumbi)
 
-- **+ Adaugă bulbi** deschide un selector în care cauți articole **publicate**.
-- Poți reordona (↑↓), șterge sau adăuga o etichetă personalizată pentru fiecare link.
-- Nu poți lega articolul de el însuși și nu poți adăuga același link de două ori.
+- **+ Adaugă bumb** adaugă un punct: text obligatoriu, plus un link opțional.
+- Linkul poate fi un articol **publicat** sau o adresă externă (`http` / `https`), care se deschide într-o filă nouă.
+- Poți reordona (↑↓) sau șterge fiecare bumb.
+- Nu poți lega articolul de el însuși și nu poți adăuga același articol de două ori. Un bumb are fie articol, fie link extern.
 
 #### Imagine principală
 
