@@ -10,7 +10,13 @@ import { AppModule } from './app.module';
 import { MAX_VIDEO_SIZE } from './modules/media/media.service';
 
 async function bootstrap() {
-  const adapter = new FastifyAdapter({ logger: false, bodyLimit: MAX_VIDEO_SIZE });
+  // Default maxParamLength is 100. Longer article slugs never match the route
+  // and Fastify returns "Cannot GET" instead of the published post.
+  const adapter = new FastifyAdapter({
+    logger: false,
+    bodyLimit: MAX_VIDEO_SIZE,
+    maxParamLength: 500,
+  });
 
   adapter.register(fastifyCookie as any, {
     secret: process.env.COOKIE_SECRET || 'civicpress-cookie-secret',

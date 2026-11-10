@@ -1,4 +1,4 @@
-import { Component, HostListener, Input, inject } from '@angular/core';
+import { Component, ElementRef, HostListener, Input, inject } from '@angular/core';
 import { CommonModule, NgTemplateOutlet } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import type { PublicSettings, MenuItem, PublicTickerBar } from '@civicpress/shared';
@@ -352,7 +352,7 @@ import { SocialLinksComponent } from './social-links.component';
 
         @if (mobileRowItems.length) {
           <div class="border-t border-gray-400 relative">
-            <nav class="overflow-x-auto scrollbar-none" aria-label="Rând categorii">
+            <nav class="cp-cat-scroll overflow-x-auto scrollbar-none" aria-label="Rând categorii">
               <ul class="flex items-center gap-0 px-2 min-w-min">
                 @for (item of mobileRowItems; track item.id) {
                   <li class="relative flex items-center flex-shrink-0">
@@ -517,9 +517,7 @@ import { SocialLinksComponent } from './social-links.component';
       .top-nav-link {
         position: relative;
         border-radius: 0.125rem;
-        transition:
-          color 180ms ease,
-          transform 120ms ease;
+        transition: color 180ms ease;
       }
 
       .top-nav-link::after {
@@ -549,10 +547,6 @@ import { SocialLinksComponent } from './social-links.component';
         color: var(--color-primary, #1d4ed8);
       }
 
-      .top-nav-link:active {
-        transform: translateY(1px);
-      }
-
       .top-nav-dropdown-link {
         border-left: 2px solid transparent;
         transition:
@@ -568,8 +562,8 @@ import { SocialLinksComponent } from './social-links.component';
         background-color: rgba(0, 0, 0, 0.04);
       }
 
-      .top-nav-dropdown-link:active {
-        transform: translateY(1px);
+      .cp-cat-scroll {
+        touch-action: pan-x;
       }
 
       .scrollbar-none {
@@ -585,6 +579,7 @@ import { SocialLinksComponent } from './social-links.component';
 })
 export class HeaderLogoComponent {
   private router = inject(Router);
+  private host = inject(ElementRef<HTMLElement>);
 
   @Input() settings: PublicSettings | null = null;
   @Input() menuItems: MenuItem[] = [];
@@ -807,6 +802,18 @@ export class HeaderLogoComponent {
 
   @HostListener('document:keydown.escape')
   onEscape() {
+    this.closeMenus();
+  }
+
+  /** Taps outside the header close menus. The sticky header is its own layer on phones, so a full-screen backdrop would not cover the page. */
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event) {
+    const target = event.target;
+    if (!(target instanceof Node) || this.host.nativeElement.contains(target)) return;
+    this.closeMenus();
+  }
+
+  private closeMenus() {
     this.closeMore();
     this.closeSearch();
     this.closeMobileMenu();

@@ -48,7 +48,7 @@ type LayoutLoad = (args: PageServerLoad) => Promise<{
     VideoOverlayComponent,
   ],
   template: `
-    <div #stickyHeader class="sticky top-0 z-50 bg-white shadow-sm md:shadow-md">
+    <div #stickyHeader class="cp-sticky-header sticky top-0 z-50 bg-white shadow-sm md:shadow-md">
       <cp-header-logo
         [settings]="settings()"
         [menuItems]="menuItems()"

@@ -844,3 +844,26 @@ img {
 .article-content .cp-article-frame > :last-child {
   margin-bottom: 0;
 }
+
+/*
+ * Phones drop taps when a sticky header contains the horizontal category
+ * scroller: the header's hit region covers the page, so category links and
+ * the stories under an article never receive the click. A layer of our own
+ * keeps hit testing inside the header box.
+ */
+.cp-sticky-header {
+  transform: translateZ(0);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  a,
+  button {
+    touch-action: manipulation;
+  }
+
+  h2 > a,
+  h3 > a,
+  h4 > a {
+    display: block;
+  }
+}
